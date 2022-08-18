@@ -26,6 +26,8 @@
 #include "board.h"
 #include "panel.h"
 #include "emergency.h"
+#include "blademotor.h"
+#include "ultrasonic_sensor.h"
 #include "soft_i2c.h"
 #include "spiflash.h"
 #include "i2c.h"
@@ -42,6 +44,7 @@ static nbt_t main_chargecontroller_nbt;
 static nbt_t main_statusled_nbt;
 static nbt_t main_emergency_nbt;
 static nbt_t main_ultrasonicsensor_nbt;
+static nbt_t main_blademotor_nbt;
 
 enum rx_status_enum { RX_WAIT, RX_VALID, RX_CRC_ERROR};
 
@@ -175,7 +178,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {           
        if (huart->Instance == MASTER_USART_INSTANCE)
        {
-         ULTRASONICSENSOR_ReceiceIT();       
+            ULTRASONICSENSOR_ReceiceIT();       
+       }
+       else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
+       {
+            BLADEMOTOR_ReceiceIT();
        }
        else if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
        {
@@ -270,8 +277,6 @@ int main(void)
     DB_TRACE(" * 24V switched on\r\n");
     RAIN_Sensor_Init();
     DB_TRACE(" * RAIN Sensor enable\r\n");
-    PAC5223RESET_Init();
-    DB_TRACE(" * PAC 5223 out of reset\r\n");
     PAC5210RESET_Init();
     DB_TRACE(" * PAC 5210 out of reset\r\n");    
     
@@ -324,8 +329,7 @@ int main(void)
         DB_TRACE(" * Drive Motors USART initialized\r\n");        
     #endif
     #ifdef BLADEMOTOR_USART_ENABLED
-        BLADEMOTOR_USART_Init();
-        DB_TRACE(" * Blade Motor USART initialized\r\n");
+    BLADEMOTOR_Init();
     #endif
     
 
@@ -349,20 +353,14 @@ int main(void)
     HAL_UART_Transmit(&DRIVEMOTORS_USART_Handler, drivemotors_init, 38, HAL_MAX_DELAY);
     HAL_Delay(100);
     DB_TRACE(" * Drive Motors initialized\r\n");
-
-    HAL_UART_Transmit(&BLADEMOTOR_USART_Handler, blademotor_init, 22, HAL_MAX_DELAY);
-    HAL_Delay(100);
-    HAL_UART_Transmit(&BLADEMOTOR_USART_Handler, blademotor_init, 22, HAL_MAX_DELAY);
-    HAL_Delay(100);
-    DB_TRACE(" * Blade Motor initialized\r\n");
-    DB_TRACE(" * HW Init completed\r\n");    
-    
+  
 
     // Initialize Main Timers
 	NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
 	NBT_init(&main_emergency_nbt, 10);
     NBT_init(&main_ultrasonicsensor_nbt, 50);
+    NBT_init(&main_blademotor_nbt, 100);
 
     DB_TRACE(" * NBT Main timers initialized\r\n");     
 
@@ -465,6 +463,10 @@ int main(void)
         if (NBT_handler(&main_ultrasonicsensor_nbt))
 	    {            
 			ULTRASONICSENSOR_App();                   
+	    }
+        if (NBT_handler(&main_blademotor_nbt))
+	    {            
+			BLADEMOTOR_App();                   
 	    }
         
 #ifndef I_DONT_NEED_MY_FINGERS
@@ -1291,8 +1293,7 @@ void ChargeController(void)
         if (charge_current < CHARGE_END_LIMIT_CURRENT) {
              charger_state = CHARGER_STATE_IDLE;
         }
-        {
-
+        
         /*charger disconnected */
         if(charge_voltage <= 0.2){
             charger_state = CHARGER_STATE_IDLE;
@@ -1323,6 +1324,7 @@ void ChargeController(void)
         chargecontrol_pwm_val = 1350;
     }
     TIM1->CCR1 = chargecontrol_pwm_val;  
+    
 }
 
 /*

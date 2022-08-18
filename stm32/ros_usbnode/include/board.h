@@ -16,7 +16,7 @@ extern "C" {
 /********************************************************************************
 * YARDFORCE 500 MAINBOARD
 ********************************************************************************/
-#define BOARD_YARDFORCE500
+
 #ifdef BOARD_YARDFORCE500            
     //#define PANEL_TYPE_YARDFORCE_500_CLASSIC    1
     // #define PANEL_TYPE_YARDFORCE_900_ECO   1
@@ -38,7 +38,7 @@ extern "C" {
     // if current is greater than this assume the battery is charging
     #define MIN_CHARGE_CURRENT                  0.1f
     #define LOW_BAT_THRESHOLD                   25.2f /* near 20% SOC */
-    #define LOW_CRI_THRESHOLD                   24,5f /* near 5% SOC */
+    #define LOW_CRI_THRESHOLD                   24.5f /* near 5% SOC */
 
     // Emergency sensor timeouts
     #define WHEEL_LIFT_EMERGENCY_MILLIS         500

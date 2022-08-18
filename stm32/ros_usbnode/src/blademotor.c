@@ -26,6 +26,7 @@
 *******************************************************************************/
 #define LENGTH_INIT_MSG 22
 #define LENGTH_RQST_MSG 7
+#define LENGTH_RECEIVED_MSG 16
 /******************************************************************************
 * Module Preprocessor Macros
 *******************************************************************************/
@@ -47,12 +48,13 @@ UART_HandleTypeDef BLADEMOTOR_USART_Handler; // UART  Handle
 DMA_HandleTypeDef hdma_uart3_rx;
 DMA_HandleTypeDef hdma_uart3_tx;
 
-BLADEMOTOR_STATE_e blademotor_eState = BLADEMOTOR_INIT_1;
+static BLADEMOTOR_STATE_e blademotor_eState = BLADEMOTOR_INIT_1;
 
 
-uint8_t blademotor_pu8ReceivedData[10] = {0};
-uint8_t blademotor_pu8RqstMessage[LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xAA};
+static uint8_t blademotor_pu8ReceivedData[LENGTH_RECEIVED_MSG] = {0};
+static uint8_t blademotor_pu8RqstMessage[LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xAA};
 
+const uint8_t blademotor_pcu8PreAmbule[5]  = {0x55,0xAA,0x0C,0x2,0xD0};
 const uint8_t blademotor_pcu8InitMsg[LENGTH_INIT_MSG] =  { 0x55, 0xaa, 0x12, 0x20, 0x80, 0x00, 0xac, 0x0d, 0x00, 0x02, 0x32, 0x50, 0x1e, 0x04, 0x00, 0x15, 0x21, 0x05, 0x0a, 0x19, 0x3c, 0xaa };
 /******************************************************************************
 * Function Prototypes
@@ -66,7 +68,7 @@ const uint8_t blademotor_pcu8InitMsg[LENGTH_INIT_MSG] =  { 0x55, 0xaa, 0x12, 0x2
  * @brief Init the Blade Motor Serial Port (PAC5223)
  * @retval None
  */
-void BLADEMOTOR_Init()
+void BLADEMOTOR_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
@@ -146,6 +148,7 @@ void BLADEMOTOR_Init()
     __HAL_LINKDMA(&BLADEMOTOR_USART_Handler,hdmatx,hdma_uart3_tx);
 
     blademotor_eState = BLADEMOTOR_INIT_1;
+    HAL_GPIO_WritePin(PAC5223RESET_GPIO_PORT, PAC5223RESET_PIN, 1);     /* take Blade PAC out of reset if HIGH */
 }
 
 void  BLADEMOTOR_App(void){
@@ -153,7 +156,7 @@ void  BLADEMOTOR_App(void){
     switch (blademotor_eState)
     {
     case BLADEMOTOR_INIT_1:
-        HAL_GPIO_WritePin(PAC5223RESET_GPIO_PORT, PAC5223RESET_PIN, 1);     // take Blade PAC out of reset if HIGH
+        HAL_GPIO_WritePin(PAC5223RESET_GPIO_PORT, PAC5223RESET_PIN, 1);     /* take Blade PAC out of reset if HIGH */
         HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pcu8InitMsg, LENGTH_INIT_MSG);
         blademotor_eState = BLADEMOTOR_RUN;
 
@@ -163,8 +166,8 @@ void  BLADEMOTOR_App(void){
     
     case BLADEMOTOR_RUN:
         
-        /* prepare to receive the message before to lauch the command */
-        HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler,blademotor_pu8ReceivedData,10);
+        /* prepare to receive the message before to launch the command */
+        HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler,blademotor_pu8ReceivedData,LENGTH_RECEIVED_MSG);
         HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, LENGTH_RQST_MSG);
 
         break;
@@ -191,15 +194,13 @@ void BLADEMOTOR_Set(uint8_t on_off)
 }
 
 
-void ULTRASONICSENSOR_ReceiceIT(void)
+void BLADEMOTOR_ReceiceIT(void)
 {
     /* decode the frame */
-    if(memcmp(ultrasonic_PreAmbule,ultrasonic_pu8ReceivedData,5) == 0){
+    if(memcmp(blademotor_pcu8PreAmbule,blademotor_pu8ReceivedData,5) == 0){
         /* todo calculate the CRC */
-        ultrasonic_u32LeftDistance = (ultrasonic_pu8ReceivedData[5] << 8) + ultrasonic_pu8ReceivedData[6];
-        ultrasonic_u32RightDistance  = (ultrasonic_pu8ReceivedData[7] << 8) + ultrasonic_pu8ReceivedData[8];
 
-        debug_printf(" R: %dmm, L: %dmm \r\n",ultrasonic_u32RightDistance/10,ultrasonic_u32LeftDistance/10);
+        //DB_TRACE(" R: %dmm, L: %dmm \r\n",ultrasonic_u32RightDistance/10,ultrasonic_u32LeftDistance/10);
   
     }
 }

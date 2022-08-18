@@ -15,6 +15,7 @@
 #include "main.h"
 #include "panel.h"
 #include "emergency.h"
+#include "blademotor.h"
 #include "spiflash.h"
 #include "stm32f1xx_hal.h"
 #include "ringbuffer.h"
@@ -342,7 +343,7 @@ extern "C" void motors_handler()
 		if (Emergency_State())
 		{
 			setDriveMotors(0,0,0,0);
-			setBladeMotor(0);
+			BLADEMOTOR_Set(0);
 		}
 		else {
 			// if the last velocity cmd is older than 1sec we stop the drive motors
@@ -357,10 +358,10 @@ extern "C" void motors_handler()
 			// if the last blade cmd is older than 25sec we stop the motor
 			last_cmd_blade_age = nh.now().sec - last_cmd_blade.sec;
 			if (last_cmd_blade_age > 25) {
-				setBladeMotor(0);
+				BLADEMOTOR_Set(0);
 			}
 			else {
-				setBladeMotor(blade_on_off);
+				BLADEMOTOR_Set(blade_on_off);
 			}
 		}
 	  }
