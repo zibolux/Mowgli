@@ -1,17 +1,17 @@
 /****************************************************************************
-* Title                 :   Blade motor driver
-* Filename              :   blademotor.h
+* Title                 :   battery module
+* Filename              :   battery.h
 * Author                :   Nekraus
-* Origin Date           :   17/08/2022
+* Origin Date           :   18/08/2022
 * Version               :   1.0.0
 
 *****************************************************************************/
-/** \file blademotor.h
-*  \brief 
-*
+/** \file battery.h
+*  \brief battery module
+* Charge and SOC calculation
 */
-#ifndef __BLADEMOTOR_H
-#define __BLADEMOTOR_H
+#ifndef __BATTERY_H
+#define __BATTERY_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,7 +19,6 @@ extern "C" {
 /******************************************************************************
 * Includes
 *******************************************************************************/
-#include <stdbool.h>
 
 /******************************************************************************
 * Preprocessor Constants
@@ -45,17 +44,13 @@ extern "C" {
 * PUBLIC Function Prototypes
 *******************************************************************************/
 
-void BLADEMOTOR_Init(void);
-void BLADEMOTOR_App(void);
-void BLADEMOTOR_ReceiceIT(void);
 
-void BLADEMOTOR_Set(uint8_t on_off);
+
 
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /*BLADEMOTOR_H*/ 
+#endif /*__BATTERY_H*/ 
 
 /*** End of File **************************************************************/
