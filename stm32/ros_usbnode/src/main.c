@@ -14,6 +14,7 @@
   */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdarg.h>
 #include <math.h>
 #include <string.h>
@@ -40,6 +41,7 @@
 static nbt_t main_chargecontroller_nbt;
 static nbt_t main_statusled_nbt;
 static nbt_t main_emergency_nbt;
+static nbt_t main_ultrasonicsensor_nbt;
 
 enum rx_status_enum { RX_WAIT, RX_VALID, RX_CRC_ERROR};
 
@@ -69,16 +71,33 @@ volatile uint8_t  master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
 static char master_tx_buffer[255];
 
+#define ADC_NUMBER_MEASURE 80
+typedef struct 
+{
+    uint16_t current_raw;
+    uint16_t charge_voltage_raw;
+    uint16_t battery_voltage_raw;
+}__attribute__((__packed__))ADC_Data_t;
+
+volatile ADC_Data_t adc_buffer[ADC_NUMBER_MEASURE]={0};
+
+typedef enum{
+    CHARGER_STATE_IDLE,
+    CHARGER_STATE_CONNECTED,
+    CHARGER_STATE_CHARGING_CC,
+    CHARGER_STATE_CHARGING_CV,
+    CHARGER_STATE_END_CHARGING,
+} CHARGER_STATE_e;
 
 int blade_motor = 0;
 
 static uint8_t panel_rcvd_data;
-
+volatile float batteryVoltage,current,chargerVoltage;
 // exported via rostopics
 float_t battery_voltage;
 float_t charge_voltage;
 float_t charge_current;
-float_t charge_current_offset;
+float_t charge_current_offset = -0.086f;
 uint16_t chargecontrol_pwm_val = MIN_CHARGE_PWM;
 uint8_t  chargecontrol_is_charging = 0;
 int32_t right_encoder_ticks = 0;
@@ -98,7 +117,7 @@ int16_t prev_left_wheel_speed_val = 0;
 
 UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
 UART_HandleTypeDef DRIVEMOTORS_USART_Handler; // UART  Handle
-UART_HandleTypeDef BLADEMOTOR_USART_Handler; // UART  Handle
+
 
 // SPI3 FLASH
 SPI_HandleTypeDef SPI3_Handle;
@@ -106,10 +125,13 @@ SPI_HandleTypeDef SPI3_Handle;
 // Drive Motors DMA
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
+DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart4_tx;
+DMA_HandleTypeDef hdma_adc;
 
 ADC_HandleTypeDef ADC_Handle;
 TIM_HandleTypeDef TIM1_Handle;  // PWM Charge Controller
+TIM_HandleTypeDef TIM2_Handle;  // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
@@ -153,55 +175,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {           
        if (huart->Instance == MASTER_USART_INSTANCE)
        {
-           /*
-            * MASTER Message handling
-            */
-           if (master_rx_buf_idx == 0 && master_rcvd_data == 0x55)           /* PREAMBLE */  
-           {                                  
-               master_rx_buf_crc = master_rcvd_data;        
-               master_rx_buf[master_rx_buf_idx++] = master_rcvd_data;                                   
-           }           
-           else if (master_rx_buf_idx == 1 && master_rcvd_data == 0xAA)        /* PREAMBLE */    
-           {                   
-               master_rx_buf_crc += master_rcvd_data;
-               master_rx_buf[master_rx_buf_idx++] = master_rcvd_data;               
-           }
-           else if (master_rx_buf_idx == 2) /* LEN */
-           {    
-               master_rx_LENGTH = master_rcvd_data;
-               master_rx_buf[master_rx_buf_idx++] = master_rcvd_data;               
-               master_rx_buf_crc += master_rcvd_data;                              
-           }
-           else if (master_rx_buf_idx >= 3 && master_rx_buf_idx <= 2+master_rx_LENGTH) /* DATA bytes */
-           {
-               master_rx_buf[master_rx_buf_idx] = master_rcvd_data;
-               master_rx_buf_idx++;
-               master_rx_buf_crc += master_rcvd_data;               
-           }
-           else if (master_rx_buf_idx >= 3+master_rx_LENGTH)    /* CRC byte */
-           {
-               master_rx_CRC = master_rcvd_data;
-               master_rx_buf[master_rx_buf_idx] = master_rcvd_data;
-               master_rx_buf_idx++;               
-               if (master_rx_buf_crc == master_rcvd_data)
-               {                   
-                   // message valid, reader must set back STATUS to RX_WAIT
-                   master_rx_STATUS = RX_VALID;
-                   //master_rx_buf_idx = 0;
-               }
-               else
-               {                   
-                   // crc failed, reader must set back STATUS to RX_WAIT
-                   master_rx_STATUS = RX_WAIT;                   
-                   master_rx_buf_idx = 0;
-               }
-           }
-           else
-           {
-               master_rx_STATUS = RX_WAIT;
-               master_rx_buf_idx = 0;               
-           }           
-       //    HAL_UART_Receive_IT(&MASTER_USART_Handler, &master_rcvd_data, 1);   // rearm interrupt           
+         ULTRASONICSENSOR_ReceiceIT();       
        }
        else if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
        {
@@ -262,10 +236,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 }
 
 int main(void)
-{    
-    uint8_t blademotor_init[] =  { 0x55, 0xaa, 0x12, 0x20, 0x80, 0x00, 0xac, 0x0d, 0x00, 0x02, 0x32, 0x50, 0x1e, 0x04, 0x00, 0x15, 0x21, 0x05, 0x0a, 0x19, 0x3c, 0xaa };    
-    uint8_t drivemotors_init[] = { 0x55, 0xaa, 0x08, 0x10, 0x80, 0xa0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x37};
-
+{        
+    //uint8_t drivemotors_init[] = { 0x55, 0xaa, 0x08, 0x10, 0x80, 0xa0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x37};
+    uint8_t drivemotors_init[] = { 0x55, 0xaa, 0x22, 0x10, 0x80, 0x00, 0x00, 0x00, 0x00, 0x02, 0xC8, 0x46, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x05, 0x0F, 0x14, 0x96, 0x0A, 0x1E, 0x5a, 0xfa, 0x05, 0x0A, 0x14, 0x32, 0x40, 0x04, 0x20, 0x01, 0x00, 0x00, 0x2C, 0x01, 0xEE};
     HAL_Init();
     SystemClock_Config();
 
@@ -276,28 +249,31 @@ int main(void)
     
     MASTER_USART_Init();
 
-    debug_printf("\r\n");
-    debug_printf("    __  ___                    ___\r\n");
-    debug_printf("   /  |/  /___ _      ______ _/ (_)\r\n");
-    debug_printf("  / /|_/ / __ \\ | /| / / __ `/ / / \r\n");
-    debug_printf(" / /  / / /_/ / |/ |/ / /_/ / / /  \r\n");
-    debug_printf("/_/  /_/\\____/|__/|__/\\__, /_/_/   \r\n");
-    debug_printf("                     /____/        \r\n");
-    debug_printf("\r\n\r\n");
-    debug_printf(" * Master USART (debug) initialized\r\n");
+    DB_TRACE("\r\n");
+    DB_TRACE("    __  ___                    ___\r\n");
+    DB_TRACE("   /  |/  /___ _      ______ _/ (_)\r\n");
+    DB_TRACE("  / /|_/ / __ \\ | /| / / __ `/ / / \r\n");
+    DB_TRACE(" / /  / / /_/ / |/ |/ / /_/ / / /  \r\n");
+    DB_TRACE("/_/  /_/\\____/|__/|__/\\__, /_/_/   \r\n");
+    DB_TRACE("                     /____/        \r\n");
+    DB_TRACE("\r\n\r\n");
+    DB_TRACE(" * Master USART (debug) initialized\r\n");
     LED_Init();
-    debug_printf(" * LED initialized\r\n");
+    DB_TRACE(" * LED initialized\r\n");
+    TIM2_Init();
+    ADC1_Init();    
+    DB_TRACE(" * ADC1 initialized\r\n");  
     TIM3_Init();
     HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);    
-    debug_printf(" * Timer3 (Beeper) initialized\r\n");
+    DB_TRACE(" * Timer3 (Beeper) initialized\r\n"); 
     TF4_Init();
-    debug_printf(" * 24V switched on\r\n");
+    DB_TRACE(" * 24V switched on\r\n");
     RAIN_Sensor_Init();
-    debug_printf(" * RAIN Sensor enable\r\n");
+    DB_TRACE(" * RAIN Sensor enable\r\n");
     PAC5223RESET_Init();
-    debug_printf(" * PAC 5223 out of reset\r\n");
+    DB_TRACE(" * PAC 5223 out of reset\r\n");
     PAC5210RESET_Init();
-    debug_printf(" * PAC 5210 out of reset\r\n");    
+    DB_TRACE(" * PAC 5210 out of reset\r\n");    
     
     if (SPIFLASH_TestDevice())
     {        
@@ -306,12 +282,12 @@ int main(void)
     }
     else
     {
-         debug_printf(" * SPIFLASH: unable to locate SPI Flash\r\n");    
+         DB_TRACE(" * SPIFLASH: unable to locate SPI Flash\r\n");    
     }    
-    debug_printf(" * SPIFLASH initialized\r\n");
+    DB_TRACE(" * SPIFLASH initialized\r\n");
 
     I2C_Init();
-    debug_printf(" * Hard I2C initialized\r\n");
+    DB_TRACE(" * Hard I2C initialized\r\n");
     if (I2C_Acclerometer_TestDevice())
     {
          I2C_Accelerometer_Setup();          
@@ -319,92 +295,88 @@ int main(void)
     else
     {
         chirp(3);        
-        debug_printf(" * WARNING: initalization of onboard accelerometer for tilt protection failed !\r\n");
+        DB_TRACE(" * WARNING: initalization of onboard accelerometer for tilt protection failed !\r\n");
     }    
-    debug_printf(" * Accelerometer (onboard/tilt safety) initialized\r\n");    
-    SW_I2C_Init();
-    debug_printf(" * Soft I2C (J18) initialized\r\n");
-    debug_printf(" * Testing supported IMUs:\r\n");
-    IMU_TestDevice();
-    IMU_Init();
-    IMU_Calibrate();
+    DB_TRACE(" * Accelerometer (onboard/tilt safety) initialized\r\n");    
+    //SW_I2C_Init();
+    DB_TRACE(" * Soft I2C (J18) initialized\r\n");
+    DB_TRACE(" * Testing supported IMUs:\r\n");
+    //IMU_TestDevice();
+    //IMU_Init();
+    //IMU_Calibrate();
     Emergency_Init();
-    debug_printf(" * Emergency sensors initialized\r\n");
-    ADC1_Init();    
-    debug_printf(" * ADC1 initialized\r\n");    
+    DB_TRACE(" * Emergency sensors initialized\r\n");  
     TIM1_Init();   
-    debug_printf(" * Timer1 (Charge PWM) initialized\r\n");    
+    DB_TRACE(" * Timer1 (Charge PWM) initialized\r\n");    
     MX_USB_DEVICE_Init();
-    debug_printf(" * USB CDC initialized\r\n");
+    DB_TRACE(" * USB CDC initialized\r\n");
     PANEL_Init();
-    debug_printf(" * Panel initialized\r\n");
+    DB_TRACE(" * Panel initialized\r\n");
 
     // Charge CH1/CH1N PWM Timer
     HAL_TIM_PWM_Start(&TIM1_Handle, TIM_CHANNEL_1);
     HAL_TIMEx_PWMN_Start(&TIM1_Handle, TIM_CHANNEL_1);
-    debug_printf(" * Charge Controler PWM Timers initialized\r\n");
+    DB_TRACE(" * Charge Controler PWM Timers initialized\r\n");
     
     // Init Drive Motors and Blade Motor
     #ifdef DRIVEMOTORS_USART_ENABLED
         DRIVEMOTORS_USART_Init();
-        debug_printf(" * Drive Motors USART initialized\r\n");        
+        DB_TRACE(" * Drive Motors USART initialized\r\n");        
     #endif
     #ifdef BLADEMOTOR_USART_ENABLED
         BLADEMOTOR_USART_Init();
-        debug_printf(" * Blade Motor USART initialized\r\n");
+        DB_TRACE(" * Blade Motor USART initialized\r\n");
     #endif
     
 
    // HAL_UART_Receive_IT(&MASTER_USART_Handler, &master_rcvd_data, 1);
-    debug_printf(" * Master Interrupt enabled\r\n");
+    DB_TRACE(" * Master Interrupt enabled\r\n");
     
     //HAL_UART_Receive_IT(&DRIVEMOTORS_USART_Handler, &drivemotors_rcvd_data, 1);    
     HAL_UART_Receive_DMA(&DRIVEMOTORS_USART_Handler, &drivemotors_rcvd_data, 1);
-    debug_printf(" * Drive Motors UART DMX (TX/TX) enabled\r\n");
+    DB_TRACE(" * Drive Motors UART DMX (TX/TX) enabled\r\n");
 
     HAL_UART_Receive_IT(&PANEL_USART_Handler, &panel_rcvd_data, 1);   // rearm interrupt               
-    debug_printf(" * Panel Interrupt enabled\r\n");
+    DB_TRACE(" * Panel Interrupt enabled\r\n");
 
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
     HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1);
-    HAL_GPIO_WritePin(PAC5223RESET_GPIO_PORT, PAC5223RESET_PIN, 1);     // take Blade PAC out of reset if HIGH
     HAL_GPIO_WritePin(PAC5210RESET_GPIO_PORT, PAC5210RESET_PIN, 0);     // take Drive Motor PAC out of reset if LOW
 
     // send some init messages - needs further investigation, drivemotors are happy without it
-    HAL_UART_Transmit(&DRIVEMOTORS_USART_Handler, drivemotors_init, 12, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&DRIVEMOTORS_USART_Handler, drivemotors_init, 38, HAL_MAX_DELAY);
     HAL_Delay(100);
-    HAL_UART_Transmit(&DRIVEMOTORS_USART_Handler, drivemotors_init, 12, HAL_MAX_DELAY);
+    HAL_UART_Transmit(&DRIVEMOTORS_USART_Handler, drivemotors_init, 38, HAL_MAX_DELAY);
     HAL_Delay(100);
-    debug_printf(" * Drive Motors initialized\r\n");
+    DB_TRACE(" * Drive Motors initialized\r\n");
 
     HAL_UART_Transmit(&BLADEMOTOR_USART_Handler, blademotor_init, 22, HAL_MAX_DELAY);
     HAL_Delay(100);
     HAL_UART_Transmit(&BLADEMOTOR_USART_Handler, blademotor_init, 22, HAL_MAX_DELAY);
     HAL_Delay(100);
-    debug_printf(" * Blade Motor initialized\r\n");
-    debug_printf(" * HW Init completed\r\n");    
+    DB_TRACE(" * Blade Motor initialized\r\n");
+    DB_TRACE(" * HW Init completed\r\n");    
     
-    // read zero offset for charge current
-    charge_current_offset = ADC_ChargeCurrent(10);
-    debug_printf(" * Charge Current Offset: %2.2fA\r\n", charge_current_offset);
 
     // Initialize Main Timers
 	NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
 	NBT_init(&main_emergency_nbt, 10);
-    debug_printf(" * NBT Main timers initialized\r\n");     
+    NBT_init(&main_ultrasonicsensor_nbt, 50);
+
+    DB_TRACE(" * NBT Main timers initialized\r\n");     
 
  #ifdef I_DONT_NEED_MY_FINGERS
-    debug_printf("\r\n");
-    debug_printf("=========================================================\r\n");
-    debug_printf(" EMERGENCY/SAFETY FEATURES ARE DISABLED IN board.h ! \r\n");
-    debug_printf("=========================================================\r\n");
-    debug_printf("\r\n");
+    DB_TRACE("\r\n");
+    DB_TRACE("=========================================================\r\n");
+    DB_TRACE(" EMERGENCY/SAFETY FEATURES ARE DISABLED IN board.h ! \r\n");
+    DB_TRACE("=========================================================\r\n");
+    DB_TRACE("\r\n");
  #endif
     // Initialize ROS
     init_ROS();
-    debug_printf(" * ROS serial node initialized\r\n");     
-    debug_printf("\r\n >>> entering main loop ...\r\n\r\n"); 
+    DB_TRACE(" * ROS serial node initialized\r\n");     
+    DB_TRACE("\r\n >>> entering main loop ...\r\n\r\n"); 
     // <chirp><chirp> means we are in the main loop 
     chirp(2);    
     while (1)
@@ -416,7 +388,6 @@ int main(void)
         if (drivemotors_rx_STATUS == RX_VALID)                    // valid frame received from DRIVEMOTORS USART
         {
             uint8_t direction = drivemotors_rx_buf[5];
-
             // we need to adjust for direction (+/-) !
             if ((direction & 0xc0) == 0xc0)
             {            
@@ -473,7 +444,7 @@ int main(void)
 
             //if (drivemotors_rx_buf[5]>>4)       // stuff is moving
            // {
-           //    msgPrint(drivemotors_rx_buf, drivemotors_rx_buf_idx);             
+            //  msgPrint(drivemotors_rx_buf, drivemotors_rx_buf_idx);             
            // }                    
             drivemotors_rx_buf_idx = 0;
             drivemotors_rx_STATUS = RX_WAIT;                    // ready for next message                        
@@ -489,8 +460,13 @@ int main(void)
 	    {            
 			StatusLEDUpdate();          
                        
-            // debug_printf("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);           
+            // DB_TRACE("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);           
 	    }
+        if (NBT_handler(&main_ultrasonicsensor_nbt))
+	    {            
+			ULTRASONICSENSOR_App();                   
+	    }
+        
 #ifndef I_DONT_NEED_MY_FINGERS
 		if (NBT_handler(&main_emergency_nbt))
 		{
@@ -516,7 +492,7 @@ void MASTER_USART_Init()
     GPIO_InitTypeDef GPIO_InitStruct;
     // RX
     GPIO_InitStruct.Pin = MASTER_USART_RX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_INPUT;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(MASTER_USART_RX_PORT, &GPIO_InitStruct);
@@ -538,6 +514,23 @@ void MASTER_USART_Init()
     MASTER_USART_Handler.Init.Mode = USART_MODE_TX_RX;         // Transceiver mode
 
     HAL_UART_Init(&MASTER_USART_Handler); // HAL_UART_Init() Will enable  UART1
+
+    /* UART4 DMA Init */
+    /* UART4_RX Init */    
+    hdma_uart4_rx.Instance = DMA2_Channel3;
+    hdma_uart4_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_uart4_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_uart4_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_uart4_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_uart4_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_uart4_rx.Init.Mode = DMA_NORMAL;
+    hdma_uart4_rx.Init.Priority = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&hdma_uart4_rx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(&MASTER_USART_Handler,hdmarx,hdma_uart4_rx);
     
     /* UART4 DMA Init */
     /* UART4_TX Init */
@@ -642,46 +635,6 @@ void DRIVEMOTORS_USART_Init()
     __HAL_UART_ENABLE_IT(&DRIVEMOTORS_USART_Handler, UART_IT_TC);
 }
 
-/**
- * @brief Init the Blade Motor Serial Port (PAC5223)
- * @retval None
- */
-void BLADEMOTOR_USART_Init()
-{
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    // enable port and usart clocks
-    BLADEMOTOR_USART_GPIO_CLK_ENABLE();
-    BLADEMOTOR_USART_USART_CLK_ENABLE();
-    
-    // RX
-    GPIO_InitStruct.Pin = BLADEMOTOR_USART_RX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(BLADEMOTOR_USART_RX_PORT, &GPIO_InitStruct);
-
-    // TX
-    GPIO_InitStruct.Pin = BLADEMOTOR_USART_TX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    // GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(BLADEMOTOR_USART_TX_PORT, &GPIO_InitStruct);
-
-    // Alternate Pin Set ?
-//    __HAL_AFIO_REMAP_USART2_ENABLE();
-
-    BLADEMOTOR_USART_Handler.Instance = BLADEMOTOR_USART_INSTANCE;// USART3
-    BLADEMOTOR_USART_Handler.Init.BaudRate = 115200;               // Baud rate
-    BLADEMOTOR_USART_Handler.Init.WordLength = UART_WORDLENGTH_8B; // The word is  8  Bit format
-    BLADEMOTOR_USART_Handler.Init.StopBits = USART_STOPBITS_1;     // A stop bit
-    BLADEMOTOR_USART_Handler.Init.Parity = UART_PARITY_NONE;       // No parity bit
-    BLADEMOTOR_USART_Handler.Init.HwFlowCtl = UART_HWCONTROL_NONE; // No hardware flow control
-    BLADEMOTOR_USART_Handler.Init.Mode = USART_MODE_TX_RX;         // Transceiver mode
-    
-    HAL_UART_Init(&BLADEMOTOR_USART_Handler); 
-}
-
 
 /**
  * @brief Init LED
@@ -722,6 +675,29 @@ void RAIN_Sensor_Init()
     HAL_GPIO_Init(RAIN_SENSOR_PORT, &GPIO_InitStruct);
 }
 
+/**
+ * @brief Init HALL STOP Sensor (PD2&3) Inputs
+ * @retval None
+ */
+void HALLSTOP_Sensor_Init()
+{
+     HALLSTOP_GPIO_CLK_ENABLE();
+    GPIO_InitTypeDef GPIO_InitStruct;
+    GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+    HAL_GPIO_Init(HALLSTOP_PORT, &GPIO_InitStruct);
+}
+
+/**
+ * @brief Poll HALLSTOP Sensor
+ * @retval 1 if right, 2 if left, 3 if both, 0 if no stop sensor trigger
+ */
+int HALLSTOP_Sense(void)
+{
+  return(!HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_3))<<1 | (!HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_2)); // pullup, active low
+}
 
 /**
  * @brief Init TF4 (24V Power Switch)
@@ -736,21 +712,6 @@ void TF4_Init()
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(TF4_GPIO_PORT, &GPIO_InitStruct);
-}
-
-/**
- * @brief PAC 5223 Reset Line (Blade Motor)
- * @retval None
- */
-void PAC5223RESET_Init()
-{
-    PAC5223RESET_GPIO_CLK_ENABLE();
-    GPIO_InitTypeDef GPIO_InitStruct;
-    GPIO_InitStruct.Pin = PAC5223RESET_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(PAC5223RESET_GPIO_PORT, &GPIO_InitStruct);
 }
 
 /**
@@ -852,7 +813,7 @@ void Error_Handler(void)
     __disable_irq();
     while (1)
     {
-        debug_printf("Error Handler reached, oops\r\n");
+        DB_TRACE("Error Handler reached, oops\r\n");
         chirp(1);        
     }
     /* USER CODE END Error_Handler_Debug */
@@ -914,6 +875,8 @@ void SystemClock_Config(void)
  */
 void ADC1_Init(void)
 {
+    ADC_ChannelConfTypeDef sConfig = {0};
+    
     __HAL_RCC_ADC1_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
@@ -931,8 +894,6 @@ void ADC1_Init(void)
 
     /* USER CODE END ADC1_Init 0 */
 
-   // ADC_ChannelConfTypeDef sConfig = {0};
-
     /* USER CODE BEGIN ADC1_Init 1 */
 
     /* USER CODE END ADC1_Init 1 */
@@ -940,21 +901,66 @@ void ADC1_Init(void)
     /** Common config
      */
     ADC_Handle.Instance = ADC1;
-    ADC_Handle.Init.ScanConvMode = ADC_SCAN_DISABLE;
+    ADC_Handle.Init.ScanConvMode = ADC_SCAN_ENABLE;
     ADC_Handle.Init.ContinuousConvMode = DISABLE;
     ADC_Handle.Init.DiscontinuousConvMode = DISABLE;
-    ADC_Handle.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+    ADC_Handle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T2_CC2;
     ADC_Handle.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-    ADC_Handle.Init.NbrOfConversion = 1;
+    ADC_Handle.Init.NbrOfConversion = 3;
     if (HAL_ADC_Init(&ADC_Handle) != HAL_OK)
     {
         Error_Handler();
     }
 
+    sConfig.Channel = ADC_CHANNEL_1; // PA1 Charge Current
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+
+    sConfig.Channel = ADC_CHANNEL_2; // PA2 Charge Voltage
+    sConfig.Rank = ADC_REGULAR_RANK_2;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+
+    sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
+    sConfig.Rank = ADC_REGULAR_RANK_3;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+
+    /* ADC DMA Init */
+    /* ADC Init */
+    hdma_adc.Instance = DMA1_Channel1;
+    hdma_adc.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_adc.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_adc.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_adc.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+    hdma_adc.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+    hdma_adc.Init.Mode = DMA_CIRCULAR;
+    hdma_adc.Init.Priority = DMA_PRIORITY_HIGH;
+    if (HAL_DMA_Init(&hdma_adc) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+   __HAL_LINKDMA(&ADC_Handle,DMA_Handle,hdma_adc);
+
     // calibrate  - important for accuracy !
     HAL_ADCEx_Calibration_Start(&ADC_Handle); 
+    memset(&adc_buffer[0],0,240);
+    HAL_ADC_Start_DMA(&ADC_Handle,&adc_buffer[0],240);
+    HAL_TIM_OC_Start(&TIM2_Handle,TIM_CHANNEL_2);
 }
 
+ 
 /**
   * @brief TIM1 Initialization Function
   * @param None
@@ -1047,6 +1053,65 @@ void ADC1_Init(void)
   #endif  
 }
 
+/**
+  * @brief TIM2 Initialization Function
+  *
+  * Used to start ADC every 250µs
+  * 
+  * @param None
+  * @retval None
+  */
+void TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+  __HAL_RCC_TIM2_CLK_ENABLE();
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  TIM2_Handle.Instance = TIM2;
+  TIM2_Handle.Init.Prescaler = 18-1; // 72Mhz -> 4Mhz
+  TIM2_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+  TIM2_Handle.Init.Period = 250-1; /*4khz*/
+  TIM2_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  TIM2_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_OC_Init(&TIM2_Handle) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&TIM2_Handle, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&TIM2_Handle, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
+  sConfigOC.Pulse = 125;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&TIM2_Handle, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
 
 /**
   * @brief TIM3 Initialization Function
@@ -1131,12 +1196,24 @@ void MX_DMA_Init(void)
   __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
+/* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* DMA1_Channel2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* DMA1_Channel3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
   /* DMA1_Channel6_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
   /* DMA1_Channel7_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
+  /* DMA2_Channel3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Channel3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Channel3_IRQn);
   /* DMA2_Channel4_5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Channel4_5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Channel4_5_IRQn);
@@ -1145,190 +1222,107 @@ void MX_DMA_Init(void)
 
 
 /*
- * Charge Current
- */
-float ADC_ChargeCurrent(uint8_t adc_conversions)
-{
-    float_t adc_current;
-    uint8_t i;
-    uint32_t adc_val_sum;
-    uint16_t adc_val;
-    ADC_ChannelConfTypeDef sConfig = {0};
-
-    // switch channel
-    sConfig.Channel = ADC_CHANNEL_1; // PA1 Charge Current
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    // do adc conversion
-    adc_val_sum = 0;    
-    for (i=0; i<adc_conversions; i++)
-    {
-        HAL_ADC_Start(&ADC_Handle);
-        HAL_ADC_PollForConversion(&ADC_Handle, 200);
-        adc_val_sum += (uint16_t) HAL_ADC_GetValue(&ADC_Handle);
-        HAL_ADC_Stop(&ADC_Handle);
-    }    
-    adc_val = adc_val_sum/adc_conversions;
-    // guessed from experiments, close enough to at least determine when the battery is charging
-    adc_current= ((float)(adc_val/4095.0f)*3.3f - 2.5f) * 100/12.0;
-    return(adc_current);
-}
-
-
-/*
- * Charge Voltage
- */
-float ADC_ChargeVoltage(uint8_t adc_conversions)
-{
-    float_t adc_volt;
-    uint8_t i;
-    uint32_t adc_val_sum;
-    uint16_t adc_val;
-
-    ADC_ChannelConfTypeDef sConfig = {0};
-
-    // switch channel
-    sConfig.Channel = ADC_CHANNEL_2; // PA2 Charge Voltage
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    // do adc conversion
-    adc_val_sum = 0;    
-    for (i=0; i<adc_conversions; i++)
-    {
-        HAL_ADC_Start(&ADC_Handle);
-        HAL_ADC_PollForConversion(&ADC_Handle, 200);
-        adc_val_sum += (uint16_t) HAL_ADC_GetValue(&ADC_Handle);
-        HAL_ADC_Stop(&ADC_Handle);
-    }    
-    adc_val = adc_val_sum/adc_conversions;
-    adc_volt= (float)(adc_val/4095.0f)*3.3f*16;     //PA2 has a 1:16 divider
-    return(adc_volt);
-}
-
-
-/*
- * Battery Voltage
- */
-float ADC_BatteryVoltage(uint8_t adc_conversions)
-{
-    float_t adc_volt;
-    uint8_t i;
-    uint32_t adc_val_sum;
-    uint16_t adc_val;
-
-    ADC_ChannelConfTypeDef sConfig = {0};
-
-    // switch channel
-    sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-    // do adc conversion
-    adc_val_sum = 0;    
-    for (i=0; i<adc_conversions; i++)
-    {
-        HAL_ADC_Start(&ADC_Handle);
-        HAL_ADC_PollForConversion(&ADC_Handle, 200);
-        adc_val_sum += (uint16_t) HAL_ADC_GetValue(&ADC_Handle);
-        HAL_ADC_Stop(&ADC_Handle);
-    }    
-    adc_val = adc_val_sum/adc_conversions;
-    adc_volt= (float)(adc_val/4095.0f)*3.3f*10 + 0.3;  //PA3 has a 1:10 divider - and there is a 0.3V drop between Bat and ADC
-    return(adc_volt);
-}
-
-/*
- * ADC test code to sample PA2 (Charge) and PA3 (Battery) Voltage
- */
-void ADC_Test()
-{
-    float_t adc_volt;
-    uint16_t adc_val;
-    ADC_ChannelConfTypeDef sConfig = {0};
-
-        // switch channel
-        sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
-        sConfig.Rank = ADC_REGULAR_RANK_1;
-        sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-        if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-        {
-            Error_Handler();
-        }
-        // do adc conversion
-        HAL_ADC_Start(&ADC_Handle);
-        HAL_ADC_PollForConversion(&ADC_Handle, 200);
-        adc_val = (uint16_t) HAL_ADC_GetValue(&ADC_Handle);
-        HAL_ADC_Stop(&ADC_Handle);
-        adc_volt= (float)(adc_val/4095.0f)*3.3f*10;  //PA3 has a 1:10 divider
-        debug_printf("Battery Voltage: %2.2fV (adc:%d)\r\n", adc_volt, adc_val);
-
-        // switch channel
-        sConfig.Channel = ADC_CHANNEL_2; // PA2 Charge
-        sConfig.Rank = ADC_REGULAR_RANK_1;
-        sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
-        if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-        {
-            Error_Handler();
-        }
-        // do adc conversion
-        HAL_ADC_Start(&ADC_Handle);
-        HAL_ADC_PollForConversion(&ADC_Handle, 200);
-        adc_val = (uint16_t) HAL_ADC_GetValue(&ADC_Handle);
-        HAL_ADC_Stop(&ADC_Handle);
-        adc_volt= (float)(adc_val/4095.0f)*3.3f*16;     //PA2 has a 1:16 divider
-        debug_printf(" Charge Voltage: %2.2fV (adc:%d)\r\n", adc_volt, adc_val);
-        debug_printf("\r\n");
-  
-}
-
-/*
  * manaes the charge voltage, and charge, lowbat LED
+ * improvementt need to be done to avoid sparks when connected charger and disconnected 
+ * todo PID current measure
  * needs to be called frequently
  */
 void ChargeController(void)
 {                        
-        charge_voltage =  ADC_ChargeVoltage(5);                    
-        battery_voltage = ADC_BatteryVoltage(5);
-        charge_current = ADC_ChargeCurrent(5) - charge_current_offset;
-        if (charge_current < 0)
-            charge_current = 0;
+    static CHARGER_STATE_e charger_state = CHARGER_STATE_IDLE;
+    static uint32_t timestamp = 0;
+    charge_voltage =  chargerVoltage;                    
+    battery_voltage = batteryVoltage;
+    charge_current = current - charge_current_offset;
+
+    //DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);
+
+    
+    switch (charger_state)
+    {
+    case CHARGER_STATE_CONNECTED:
         
-        if (charge_voltage >= MIN_CHARGE_VOLTAGE ) {
-            // set PWM to approach 29.4V charge voltage
-            if ((charge_voltage < 29.4) && (chargecontrol_pwm_val < 1350))
-            {
-                chargecontrol_pwm_val++;
-            }            
-            if ((charge_voltage > 29.4) && (chargecontrol_pwm_val > 50))
-            {
-                chargecontrol_pwm_val--;
-            }
-            // cap charge current at 1.0 Amps
-            if (charge_current > MAX_CHARGE_CURRENT)
-            {
-                chargecontrol_pwm_val--;
-            }
+        /* when connected the 3.3v and 5v is provided by the charger so we get the real biais of the current measure
+        * todo poweroff the 24V,   
+        */
+        chargecontrol_pwm_val = 00;
+
+        /* wait 100ms to read current */
+        if( (HAL_GetTick() - timestamp) > 100){
+            charge_current_offset = current;
+            charger_state = CHARGER_STATE_CHARGING_CC;
         }
-        else {
-             chargecontrol_pwm_val = MIN_CHARGE_PWM;    
-             // constantly get fresh offet if we are not charging      
-             if (charge_voltage == 0)
-             {
-                charge_current_offset = ADC_ChargeCurrent(5);
-             }
-        }        
-        TIM1->CCR1 = chargecontrol_pwm_val;  
+
+        break;
+
+    case CHARGER_STATE_CHARGING_CC:
+        // cap charge current at 1 Amps
+        if ((charge_current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 50))
+        {
+            chargecontrol_pwm_val--;
+        }
+        if ((charge_current < MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val < 1350))
+        {
+            chargecontrol_pwm_val++;
+        }
+
+        if(charge_voltage >= 29.4){
+            charger_state = CHARGER_STATE_CHARGING_CV;
+        }
+        /*charger disconnected */
+        if(charge_voltage <= 0.2){
+            charger_state = CHARGER_STATE_IDLE;
+        }
+
+        break;
+
+    case CHARGER_STATE_CHARGING_CV:
+        // set PWM to approach 29.4V charge voltage
+        if ((charge_voltage < 29.4) && (chargecontrol_pwm_val < 1350))
+        {
+            chargecontrol_pwm_val++;
+        }            
+        if ((charge_voltage > 29.4) && (chargecontrol_pwm_val > 50))
+        {
+            chargecontrol_pwm_val--;
+        }
+
+        /* battery full ? */
+        if (charge_current < CHARGE_END_LIMIT_CURRENT) {
+             charger_state = CHARGER_STATE_IDLE;
+        }
+        {
+
+        /*charger disconnected */
+        if(charge_voltage <= 0.2){
+            charger_state = CHARGER_STATE_IDLE;
+        }
+        break;
+
+    case CHARGER_STATE_END_CHARGING:
+        chargecontrol_pwm_val = 0;
+        break;
+
+
+    case CHARGER_STATE_IDLE:
+    default:
+       
+
+        if (charge_voltage >= MIN_CHARGE_VOLTAGE ) {
+            charger_state = CHARGER_STATE_CONNECTED;
+            timestamp = HAL_GetTick();
+        }
+        chargecontrol_pwm_val = MIN_CHARGE_PWM;
+        break;
+    }
+    
+    chargecontrol_is_charging = charger_state;
+
+    /*Check the PWM value for safety */
+    if (chargecontrol_pwm_val > 1350){
+        chargecontrol_pwm_val = 1350;
+    }
+    TIM1->CCR1 = chargecontrol_pwm_val;  
 }
 
 /*
@@ -1337,39 +1331,41 @@ void ChargeController(void)
 void StatusLEDUpdate(void)
 {
         if (Emergency_State()) {
-            debug_printf("Emergency !");
+            DB_TRACE("Emergency !");
             PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_FLASH_FAST);
         } else {
             PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_OFF);
         }
 
-        if ((charge_voltage >= MIN_CHARGE_VOLTAGE) && (charge_current >= MIN_CHARGE_CURRENT))         // we are charging ...
+        if (chargecontrol_is_charging == 1) //Connected to charger
         {
-            // indicate charging by flashing fast if we are plugged in
+            PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_ON);
+        }
+        else if (chargecontrol_is_charging == 2) //CC mode 1A
+        {
             PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_FAST);
-            chargecontrol_is_charging = 1;
         }
-        else
+        else if(chargecontrol_is_charging == 2) //CV mode
         {
+            PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_SLOW);
+        }
+        else{
             PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_OFF);
-            chargecontrol_is_charging = 0;
         }
-            
-        // show a lowbat warning if battery voltage drops below LOW_BAT_THRESHOLD ? (random guess, needs more testing or a compare to the stock firmware)            
-        // if goes below LOW_BAT_THRESHOLD-1 we increase led flash frequency        
-        if (battery_voltage <= LOW_BAT_THRESHOLD)
+
+        // show a lowbat warning if battery voltage drops below LOW_BAT_THRESHOLD ? (random guess, needs more testing or a compare to the stock firmware)                   
+        if (battery_voltage <= LOW_CRI_THRESHOLD)
         {
-            PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_SLOW); // low
+            PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_FAST); // low
         }
-        else if (battery_voltage <= LOW_BAT_THRESHOLD-1.0)
+        else if (battery_voltage <= LOW_BAT_THRESHOLD)
         {
-            PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_FAST); // really low
+            PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_FLASH_SLOW); // really low
         }
         else
         {
             PANEL_Set_LED(PANEL_LED_BATTERY_LOW, PANEL_LED_OFF); // bat ok
-        }                
-        debug_printf(" > Chg Voltage: %2.2fV | Chg Current: %2.2fA (offset: %2.2fA) | PWM: %d | Bat Voltage %2.2fV\r\n", charge_voltage, charge_current, charge_current_offset,  chargecontrol_pwm_val, battery_voltage);                           
+        }                                           
 }
 
 /*
@@ -1416,38 +1412,17 @@ void setDriveMotors(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, u
 }
 
 /*
- * Send message to Blade PAC
- *
- * <on_off> - no speed settings available
- */
-void setBladeMotor(uint8_t on_off)
-{
-    uint8_t blademotor_on[] =  { 0x55, 0xaa, 0x03, 0x20, 0x80, 0x80, 0x22};
-    uint8_t blademotor_off[] = { 0x55, 0xaa, 0x03, 0x20, 0x80, 0x0, 0xa2};
-
-    if (on_off)
-    {
-        HAL_UART_Transmit(&BLADEMOTOR_USART_Handler, blademotor_on, sizeof(blademotor_on), HAL_MAX_DELAY);    
-    }
-    else
-    {
-        HAL_UART_Transmit(&BLADEMOTOR_USART_Handler, blademotor_off, sizeof(blademotor_off), HAL_MAX_DELAY);
-    }
-        
-}
-
-/*
  * print hex bytes
  */
 void msgPrint(uint8_t *msg, uint8_t msg_len)
 {
      int i;
-     debug_printf("msg: ");
+     DB_TRACE("msg: ");
      for (i=0;i<msg_len;i++)
      {
-        debug_printf(" %02x", msg[i]);
+        DB_TRACE(" %02x", msg[i]);
      }            
-     debug_printf("\r\n");
+     DB_TRACE("\r\n");
 }
 
 /*
@@ -1489,7 +1464,11 @@ void vprint(const char *fmt, va_list argp)
     char string[200];    
     if(0 < vsprintf(string,fmt,argp)) // build string
     {
-        MASTER_Transmit((unsigned char*)string, strlen(string));
+         for (int i = 0; i < strlen(string); i++)
+         {
+             ITM_SendChar(string[i]);
+         }
+       // MASTER_Transmit((unsigned char*)string, strlen(string));
 
         // HAL_UART_Transmit(&MASTER_USART_Handler, (uint8_t*)string, strlen(string), HAL_MAX_DELAY); // send message via UART               
         //while (master_tx_busy) {  }
@@ -1538,4 +1517,52 @@ void DRIVEMOTORS_Transmit(uint8_t *buffer, uint8_t len)
     drivemotors_tx_buffer_len = len;
     memcpy(drivemotors_tx_buffer, buffer, drivemotors_tx_buffer_len);
     HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotors_tx_buffer, drivemotors_tx_buffer_len); // send message via UART       
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+  volatile int i = 0;
+  volatile uint32_t l_u32Current_sum = 0;
+  volatile uint32_t l_u32BatVoltage_sum = 0;
+  volatile uint32_t l_u32ChargerVoltage_sum = 0;
+  
+  
+  for(i= 40;i<80;++i){
+        l_u32Current_sum += adc_buffer[i].current_raw;
+        l_u32ChargerVoltage_sum += adc_buffer[i].charge_voltage_raw;
+        l_u32BatVoltage_sum += adc_buffer[i].battery_voltage_raw;
+
+    }
+   
+  current = (float)l_u32Current_sum/(40);
+  chargerVoltage = (float)l_u32ChargerVoltage_sum/(40);
+  batteryVoltage = (float)l_u32BatVoltage_sum/(40);
+
+  current = ((float)(current/4095.0f)*3.3f - 2.5f) * 100/12.0;
+  chargerVoltage = (float)(chargerVoltage/4095.0f)*3.3f*16;
+  batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10 + 0.3;
+
+
+
+}
+void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc){
+    volatile int i = 0;
+    volatile uint32_t l_u32Current_sum = 0;
+    volatile uint32_t l_u32BatVoltage_sum = 0;
+    volatile uint32_t l_u32ChargerVoltage_sum = 0;
+
+    for(i= 0;i<40;++i){
+        l_u32Current_sum += adc_buffer[i].current_raw;
+        l_u32ChargerVoltage_sum += adc_buffer[i].charge_voltage_raw;
+        l_u32BatVoltage_sum += adc_buffer[i].battery_voltage_raw;
+
+    }
+    
+    current = (float)l_u32Current_sum/(40);
+    chargerVoltage = (float)l_u32ChargerVoltage_sum/(40);
+    batteryVoltage = (float)l_u32BatVoltage_sum/(40);
+
+    current = ((float)(current/4095.0f)*3.3f - 2.5f) * 100/12.0;
+    chargerVoltage = (float)(chargerVoltage/4095.0f)*3.3f*16;
+    batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10 + 0.3;
+
 }

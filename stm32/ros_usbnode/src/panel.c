@@ -33,6 +33,11 @@ uint8_t buttoncleared = 0;
     const uint8_t KEY_ACTIVATE[] = {0x0, 0x0, 0x1};    
 #endif
 
+#ifdef PANEL_TYPE_YARDFORCE_LUV1000RI
+    const uint8_t KEY_INIT_MSG[] = {0x03, 0x99, 0x21};    
+    const uint8_t KEY_ACTIVATE[] = {0x0, 0x0, 0x1};    
+#endif
+
 
 static uint8_t Led_States[LED_STATE_SIZE];
 
@@ -171,7 +176,7 @@ void PANEL_Init(void)
     uint8_t i,j=0;
     for (j=0;j<2;j++)
     {
-        for (i=4;i<7;i++)
+        for (i=4;i<11;i++)
         {
             memset(Led_States, 0x0, LED_STATE_SIZE);
             PANEL_Set_LED(i, PANEL_LED_ON);
@@ -179,7 +184,7 @@ void PANEL_Init(void)
             PANEL_Send_Message((uint8_t*)KEY_ACTIVATE, sizeof(KEY_ACTIVATE), 0x5084);
             HAL_Delay(50);
         }
-        for (i=7;i>=4;i--)
+        for (i=11;i>=4;i--)
         {
             memset(Led_States, 0x0, LED_STATE_SIZE);
             PANEL_Set_LED(i, PANEL_LED_ON);
@@ -233,7 +238,7 @@ void PANEL_Tick(void)
       if (ReceiveBuffer[0] == 0x55 && ReceiveBuffer[1] == 0xaa && ReceiveBuffer[3] == 0x50) // & ReceiveBuffer[2]==0x02  & ReceiveBuffer[4]==0x00)
       {
         
-            debug_printf("%x %x %x | %x %x %x \r\n",ReceiveBuffer[2],ReceiveBuffer[3],ReceiveBuffer[4], ReceiveBuffer[5], ReceiveBuffer[6], ReceiveBuffer[7]);
+            //debug_printf("%x %x %x | %x %x %x \r\n",ReceiveBuffer[2],ReceiveBuffer[3],ReceiveBuffer[4], ReceiveBuffer[5], ReceiveBuffer[6], ReceiveBuffer[7]);
             /* if (ReceiveBuffer[5]==0x02) debug_printf("key: timer\r\n");
             if (ReceiveBuffer[6]==0x02) debug_printf("key: S1\r\n");
             if (ReceiveBuffer[7]==0x02) debug_printf("key: S2\r\n");

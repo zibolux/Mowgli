@@ -20,7 +20,7 @@
 #include "main.h"
 #include "i2c.h"
 
-// #define EMERGENCY_DEBUG 1
+//#define EMERGENCY_DEBUG 1
 
 static uint8_t emergency_state = 0;
 static uint32_t stop_emergency_started = 0;

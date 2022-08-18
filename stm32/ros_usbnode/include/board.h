@@ -16,24 +16,29 @@ extern "C" {
 /********************************************************************************
 * YARDFORCE 500 MAINBOARD
 ********************************************************************************/
+#define BOARD_YARDFORCE500
 #ifdef BOARD_YARDFORCE500            
-    #define PANEL_TYPE_YARDFORCE_500_CLASSIC    1
+    //#define PANEL_TYPE_YARDFORCE_500_CLASSIC    1
     // #define PANEL_TYPE_YARDFORCE_900_ECO   1
+    #define PANEL_TYPE_YARDFORCE_LUV1000RI       1
 
     // define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
-    #define SUPPORT_ROS_CALIBRATION_IMU           1     
+    //#define SUPPORT_ROS_CALIBRATION_IMU           1     
 
-    #define I_DONT_NEED_MY_FINGERS              1       // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
+    #define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
     /// nominal max charge current is 1 Amp
-    #define MAX_CHARGE_CURRENT                  1.0
+    #define MAX_CHARGE_CURRENT                  1.0f
+    ///We consider the battery is full when in CV mode the current below 0.1A
+    #define CHARGE_END_LIMIT_CURRENT          0.1f
     // if voltage is greater than this assume we are docked
-    #define MIN_CHARGE_VOLTAGE                  5.0
+    #define MIN_CHARGE_VOLTAGE                  5.0f
     // must provide at least MIN_CHARGE_VOLTAGE when docked
     #define MIN_CHARGE_PWM                      500
     // if current is greater than this assume the battery is charging
-    #define MIN_CHARGE_CURRENT                  0.2
-    #define LOW_BAT_THRESHOLD                   23.5
+    #define MIN_CHARGE_CURRENT                  0.1f
+    #define LOW_BAT_THRESHOLD                   25.2f /* near 20% SOC */
+    #define LOW_CRI_THRESHOLD                   24,5f /* near 5% SOC */
 
     // Emergency sensor timeouts
     #define WHEEL_LIFT_EMERGENCY_MILLIS         500
@@ -43,10 +48,10 @@ extern "C" {
     #define IMU_ONBOARD_INCLINATION_THRESHOLD   0x38     // stock firmware uses 0x2C (way more allowed inclination)
 
     // IMU configuration options
-    //#define IMU_ONBOARD_ACCELERATION            1
-    //#define IMU_ONBOARD_TEMP                    1
-    #define IMU_ACCELERATION                    1       // external IMU
-    #define IMU_ANGULAR                         1       // external IMU
+    #define IMU_ONBOARD_ACCELERATION            1
+    #define IMU_ONBOARD_TEMP                    1
+    //#define IMU_ACCELERATION                    1       // external IMU
+    //#define IMU_ANGULAR                         1       // external IMU
     
     // we use J18 (Red 9 pin connector as Master Serial Port)
     #define MASTER_J18 1
@@ -143,6 +148,13 @@ extern "C" {
     #define RAIN_SENSOR_PORT GPIOE
     #define RAIN_SENSOR_GPIO_CLK_ENABLE() __HAL_RCC_GPIOE_CLK_ENABLE()
 
+    /* STOP HALL Sensor - (HIGH when set) */
+    #define HALLSTOP_RIGHT_PIN GPIO_PIN_2
+    #define HALLSTOP_LEFT_PIN GPIO_PIN_3
+    #define HALLSTOP_PORT GPIOD
+    #define HALLSTOP_GPIO_CLK_ENABLE() __HAL_RCC_GPIOD_CLK_ENABLE()
+
+
     /* either J6 or J18 can be the master USART port */
 #ifdef MASTER_J6    
     /* USART1 (J6 Pin 1 (TX) Pin 2 (RX)) */    
@@ -214,9 +226,9 @@ extern "C" {
 
     // J18 has the SPI3 pins, as we dont use SPI3, we recycle them for I2C Bitbanging (for our Pololu ALtIMU-10v5)
     #ifdef SOFT_I2C_ENABLED
-        #define SOFT_I2C_SCL_PIN GPIO_PIN_3
+        #define SOFT_I2C_SCL_PIN GPIO_PIN_4
         #define SOFT_I2C_SCL_PORT GPIOB
-        #define SOFT_I2C_SDA_PIN GPIO_PIN_4
+        #define SOFT_I2C_SDA_PIN GPIO_PIN_5
         #define SOFT_I2C_SDA_PORT GPIOB
 
         #define SOFT_I2C_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE();

@@ -48,6 +48,10 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
+#define DB_ACTIVE 1
+#define DB_TRACE(...)\
+            do { if (DB_ACTIVE) debug_printf( __VA_ARGS__); } while (0)
+
 void ADC_Test();
 float ADC_BatteryVoltage(uint8_t adc_conversions);
 float ADC_ChargeVoltage(uint8_t adc_conversions);
@@ -99,6 +103,7 @@ void BLADEMOTOR_USART_Init();
 void SystemClock_Config();
 void ADC1_Init(void);
 void TIM1_Init(void);
+void TIM2_Init(void);
 void TIM3_Init(void);
 void MX_DMA_Init(void);
 void Emergency_Init(void);

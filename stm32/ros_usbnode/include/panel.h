@@ -40,6 +40,24 @@ typedef enum
     #define LED_CMD 0x508b
 #endif
 
+#ifdef PANEL_TYPE_YARDFORCE_LUV1000RI   
+    #define PANEL_LED_LIFTED 0
+    #define PANEL_LED_SIGNAL 1
+    #define PANEL_LED_BATTERY_LOW 2
+    #define PANEL_LED_CHARGING 3
+    #define PANEL_LED_4H 4
+    #define PANEL_LED_6H 5
+    #define PANEL_LED_8H 6
+    #define PANEL_LED_10H 7
+    #define PANEL_LED_S1 8
+    #define PANEL_LED_S2 9
+    #define PANEL_LED_LOCK 10
+    #define PANEL_LED_WIFI 11
+    
+    #define LED_STATE_SIZE 12       // model has 12-1 different leds to control ?   
+    #define LED_CMD 0x508b
+#endif
+
 #ifdef PANEL_TYPE_YARDFORCE_500_CLASSIC   // Yardforce 500 CLASSIC
     #define PANEL_LED_LIFTED 0
     #define PANEL_LED_SIGNAL 1

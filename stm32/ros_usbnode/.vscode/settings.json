@@ -13,6 +13,8 @@
         "__string": "c",
         "string": "c",
         "string_view": "c",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "*.tcc": "c",
+        "stdbool.h": "c"
     }
 }
