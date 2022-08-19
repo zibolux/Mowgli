@@ -16,6 +16,7 @@
 #include "panel.h"
 #include "emergency.h"
 #include "blademotor.h"
+#include "drivemotor.h"
 #include "spiflash.h"
 #include "stm32f1xx_hal.h"
 #include "ringbuffer.h"
@@ -320,7 +321,6 @@ extern "C" void chatter_handler()
 		  imu_onboard_temp_msg.header.frame_id = base_link;
 		  pubIMUOnboardTemp.publish(&imu_onboard_temp_msg);
 */
-		  HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);         // flash LED
 
 		  // reboot if set via cbReboot (mowgli/Reboot)
 		  if (reboot_flag)
@@ -342,17 +342,17 @@ extern "C" void motors_handler()
 	  {
 		if (Emergency_State())
 		{
-			setDriveMotors(0,0,0,0);
+			DRIVEMOTOR_SetSpeed(0,0,0,0);
 			BLADEMOTOR_Set(0);
 		}
 		else {
 			// if the last velocity cmd is older than 1sec we stop the drive motors
 			last_cmd_vel_age = nh.now().sec - last_cmd_vel.sec;			
 			if (last_cmd_vel_age > 1) {
-				setDriveMotors(0, 0, left_dir, right_dir);
+				DRIVEMOTOR_SetSpeed(0, 0, left_dir, right_dir);
 			}
 			else {
-				setDriveMotors(left_speed, right_speed, left_dir, right_dir);
+				DRIVEMOTOR_SetSpeed(left_speed, right_speed, left_dir, right_dir);
 			}
 
 			// if the last blade cmd is older than 25sec we stop the motor

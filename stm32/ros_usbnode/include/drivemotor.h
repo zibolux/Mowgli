@@ -40,13 +40,24 @@ extern "C" {
 * Variables
 *******************************************************************************/
 
+extern int16_t   right_wheel_speed_val;
+extern int16_t   left_wheel_speed_val;
+extern int32_t   right_encoder_ticks;  // accumulating
+extern int32_t   left_encoder_ticks;   // accumulating 
+extern uint16_t  right_encoder_val;    // non accumulating 
+extern uint16_t  left_encoder_val;     // non accumulating 
+
+
 /******************************************************************************
 * PUBLIC Function Prototypes
 *******************************************************************************/
 
+void DRIVEMOTOR_Init(void);
+void DRIVEMOTOR_App_10ms(void);
+void DRIVEMOTOR_App_Rx(void);
+void DRIVEMOTOR_ReceiceIT(void);
 
-
-
+void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_dir, uint8_t right_dir);
 
 #ifdef __cplusplus
 }

@@ -13,10 +13,13 @@
 /******************************************************************************
 * Includes
 *******************************************************************************/
+#include <string.h>
+#include <stdbool.h>
+
 #include "stm32f1xx_hal.h"
 #include "stm32f1xx_hal_uart.h"
-#include "main.h"
 
+#include "main.h"
 #include "board.h"
 
 #include "blademotor.h" 
@@ -24,9 +27,9 @@
 /******************************************************************************
 * Module Preprocessor Constants
 *******************************************************************************/
-#define LENGTH_INIT_MSG 22
-#define LENGTH_RQST_MSG 7
-#define LENGTH_RECEIVED_MSG 16
+#define BLADEMOTOR_LENGTH_INIT_MSG 22
+#define BLADEMOTOR_LENGTH_RQST_MSG 7
+#define BLADEMOTOR_LENGTH_RECEIVED_MSG 14
 /******************************************************************************
 * Module Preprocessor Macros
 *******************************************************************************/
@@ -50,12 +53,15 @@ DMA_HandleTypeDef hdma_uart3_tx;
 
 static BLADEMOTOR_STATE_e blademotor_eState = BLADEMOTOR_INIT_1;
 
+bool BLADEMOTOR_bActivated = false;
+uint16_t BLADEMOTOR_u16Counter1 = 0;
+uint16_t BLADEMOTOR_u16Counter2 = 0;
 
-static uint8_t blademotor_pu8ReceivedData[LENGTH_RECEIVED_MSG] = {0};
-static uint8_t blademotor_pu8RqstMessage[LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xA2;
+static uint8_t blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG] = {0};
+static uint8_t blademotor_pu8RqstMessage[BLADEMOTOR_LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xA2};
 
-const uint8_t blademotor_pcu8PreAmbule[5]  = {0x55,0xAA,0x0C,0x2,0xD0};
-const uint8_t blademotor_pcu8InitMsg[LENGTH_INIT_MSG] =  { 0x55, 0xaa, 0x12, 0x20, 0x80, 0x00, 0xac, 0x0d, 0x00, 0x02, 0x32, 0x50, 0x1e, 0x04, 0x00, 0x15, 0x21, 0x05, 0x0a, 0x19, 0x3c, 0xaa };
+const uint8_t blademotor_pcu8PreAmbule[5]  = {0x55,0xAA,0x0A,0x2,0xD0};
+const uint8_t blademotor_pcu8InitMsg[BLADEMOTOR_LENGTH_INIT_MSG] =  { 0x55, 0xaa, 0x12, 0x20, 0x80, 0x00, 0xac, 0x0d, 0x00, 0x02, 0x32, 0x50, 0x1e, 0x04, 0x00, 0x15, 0x21, 0x05, 0x0a, 0x19, 0x3c, 0xaa };
 /******************************************************************************
 * Function Prototypes
 *******************************************************************************/
@@ -79,6 +85,7 @@ void BLADEMOTOR_Init(void)
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(PAC5223RESET_GPIO_PORT, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(PAC5223RESET_GPIO_PORT, PAC5223RESET_PIN, 1);     /* take Blade PAC out of reset if HIGH */
 
     // enable port and usart clocks
     BLADEMOTOR_USART_GPIO_CLK_ENABLE();
@@ -97,6 +104,8 @@ void BLADEMOTOR_Init(void)
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(BLADEMOTOR_USART_TX_PORT, &GPIO_InitStruct);
 
+    DB_TRACE(" * Blade Motor  GPIO initialized\r\n");
+
     BLADEMOTOR_USART_Handler.Instance = BLADEMOTOR_USART_INSTANCE;// USART3
     BLADEMOTOR_USART_Handler.Init.BaudRate = 115200;               // Baud rate
     BLADEMOTOR_USART_Handler.Init.WordLength = UART_WORDLENGTH_8B; // The word is  8  Bit format
@@ -107,11 +116,7 @@ void BLADEMOTOR_Init(void)
     
     HAL_UART_Init(&BLADEMOTOR_USART_Handler); 
 
-    // enable IRQ
-    HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(USART3_IRQn);     
-    __HAL_UART_ENABLE_IT(&BLADEMOTOR_USART_Handler, UART_IT_TC);
-
+    DB_TRACE(" * Blade Motor UART initialized\r\n");
 
     /* UART4 DMA Init */
     /* UART4_RX Init */    
@@ -146,9 +151,17 @@ void BLADEMOTOR_Init(void)
     }
 
     __HAL_LINKDMA(&BLADEMOTOR_USART_Handler,hdmatx,hdma_uart3_tx);
+    DB_TRACE(" * DMA initialized\r\n");
+
+        // enable IRQ
+    HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(USART3_IRQn);     
+    __HAL_UART_ENABLE_IT(&BLADEMOTOR_USART_Handler, UART_IT_TC);
 
     blademotor_eState = BLADEMOTOR_INIT_1;
-    HAL_GPIO_WritePin(PAC5223RESET_GPIO_PORT, PAC5223RESET_PIN, 1);     /* take Blade PAC out of reset if HIGH */
+
+
+    DB_TRACE(" * Blade Motor UART & GPIO initialized\r\n");
 }
 
 void  BLADEMOTOR_App(void){
@@ -156,8 +169,8 @@ void  BLADEMOTOR_App(void){
     switch (blademotor_eState)
     {
     case BLADEMOTOR_INIT_1:
-        HAL_GPIO_WritePin(PAC5223RESET_GPIO_PORT, PAC5223RESET_PIN, 1);     /* take Blade PAC out of reset if HIGH */
-        HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pcu8InitMsg, LENGTH_INIT_MSG);
+
+        HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pcu8InitMsg, BLADEMOTOR_LENGTH_INIT_MSG);
         blademotor_eState = BLADEMOTOR_RUN;
 
         DB_TRACE(" * Blade Motor initialized\r\n");
@@ -167,9 +180,8 @@ void  BLADEMOTOR_App(void){
     case BLADEMOTOR_RUN:
         
         /* prepare to receive the message before to launch the command */
-        HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler,blademotor_pu8ReceivedData,LENGTH_RECEIVED_MSG);
-        HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, LENGTH_RQST_MSG);
-
+        HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler,blademotor_pu8ReceivedData,BLADEMOTOR_LENGTH_RECEIVED_MSG);
+        HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);
         break;
     
     default:
@@ -200,9 +212,18 @@ void BLADEMOTOR_ReceiceIT(void)
 {
     /* decode the frame */
     if(memcmp(blademotor_pcu8PreAmbule,blademotor_pu8ReceivedData,5) == 0){
-        /* todo calculate the CRC */
-
-        //DB_TRACE(" R: %dmm, L: %dmm \r\n",ultrasonic_u32RightDistance/10,ultrasonic_u32LeftDistance/10);
+        uint8_t l_u8crc = crcCalc(blademotor_pu8ReceivedData,BLADEMOTOR_LENGTH_RECEIVED_MSG-1);
+        if(blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG-1] == l_u8crc ){
+            if((blademotor_pu8ReceivedData[5] & 0x80) == 0x80){
+                BLADEMOTOR_bActivated = true;
+            }
+            else{
+                BLADEMOTOR_bActivated = false;
+            }
+            BLADEMOTOR_u16Counter1 = blademotor_pu8ReceivedData[7] + (blademotor_pu8ReceivedData[8]<<8);
+            BLADEMOTOR_u16Counter2 = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;
+            DB_TRACE (" act : %d, B5 : %x, u16_0 :%d, u16_A: %d \n",BLADEMOTOR_bActivated, blademotor_pu8ReceivedData[5],BLADEMOTOR_u16Counter1,BLADEMOTOR_u16Counter2 );
+        }
   
     }
 }

@@ -62,12 +62,15 @@ uint16_t cnt_usart2_overrun = 0;
 /* External variables --------------------------------------------------------*/
 extern UART_HandleTypeDef MASTER_USART_Handler;
 extern UART_HandleTypeDef DRIVEMOTORS_USART_Handler;
+extern UART_HandleTypeDef BLADEMOTOR_USART_Handler; 
 extern PCD_HandleTypeDef hpcd_USB_FS;
 
 extern DMA_HandleTypeDef hdma_uart4_tx;
 extern DMA_HandleTypeDef hdma_uart4_rx;
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart2_tx;
+extern DMA_HandleTypeDef hdma_uart3_tx;
+extern DMA_HandleTypeDef hdma_uart3_rx;
 extern DMA_HandleTypeDef hdma_adc;
 /* USER CODE BEGIN EV */
 
@@ -242,6 +245,14 @@ void SysTick_Handler(void)
     HAL_UART_IRQHandler(&DRIVEMOTORS_USART_Handler);    
   }
 
+  /**
+  * @brief This function handles UART global interrupt.
+  */
+  void USART3_IRQHandler(void)
+  {    
+    HAL_UART_IRQHandler(&BLADEMOTOR_USART_Handler);    
+  }
+
 
 /**
   * @brief This function handles UART4 global interrupt.
@@ -265,6 +276,22 @@ void DMA1_Channel1_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
 
   /* USER CODE END DMA1_Channel1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 channel2 global interrupt.
+  */
+void DMA1_Channel2_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_uart3_tx);
+}
+
+/**
+  * @brief This function handles DMA1 channel3 global interrupt.
+  */
+void DMA1_Channel3_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_uart3_rx);
 }
 
 /**

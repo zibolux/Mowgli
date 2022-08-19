@@ -30,7 +30,7 @@ extern "C" {
     /// nominal max charge current is 1 Amp
     #define MAX_CHARGE_CURRENT                  1.0f
     ///We consider the battery is full when in CV mode the current below 0.1A
-    #define CHARGE_END_LIMIT_CURRENT          0.1f
+    #define CHARGE_END_LIMIT_CURRENT          0.08f
     // if voltage is greater than this assume we are docked
     #define MIN_CHARGE_VOLTAGE                  5.0f
     // must provide at least MIN_CHARGE_VOLTAGE when docked
