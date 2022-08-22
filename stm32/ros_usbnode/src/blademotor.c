@@ -222,7 +222,7 @@ void BLADEMOTOR_ReceiceIT(void)
             }
             BLADEMOTOR_u16Counter1 = blademotor_pu8ReceivedData[7] + (blademotor_pu8ReceivedData[8]<<8);
             BLADEMOTOR_u16Counter2 = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;
-            DB_TRACE (" act : %d, B5 : %x, u16_0 :%d, u16_A: %d \n",BLADEMOTOR_bActivated, blademotor_pu8ReceivedData[5],BLADEMOTOR_u16Counter1,BLADEMOTOR_u16Counter2 );
+            //DB_TRACE (" act : %d, B5 : %x, u16_0 :%d, u16_A: %d \n",BLADEMOTOR_bActivated, blademotor_pu8ReceivedData[5],BLADEMOTOR_u16Counter1,BLADEMOTOR_u16Counter2 );
         }
   
     }

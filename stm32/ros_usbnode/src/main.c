@@ -41,11 +41,18 @@
 #include "cpp_main.h"
 #include "ringbuffer.h"
 
+
+static void WATCHDOG_vInit(void);
+static void WATCHDOG_Refresh(void);
+
 static nbt_t main_chargecontroller_nbt;
 static nbt_t main_statusled_nbt;
 static nbt_t main_emergency_nbt;
 static nbt_t main_ultrasonicsensor_nbt;
 static nbt_t main_blademotor_nbt;
+static nbt_t main_drivemotor_nbt;
+static nbt_t main_wdg_nbt;
+
 
 
 
@@ -85,6 +92,7 @@ int blade_motor = 0;
 
 static uint8_t panel_rcvd_data;
 volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage;
+float SOC, ampere_acc = 0;
 // exported via rostopics
 float_t battery_voltage;
 float_t charge_voltage;
@@ -108,6 +116,9 @@ ADC_HandleTypeDef ADC_Handle;
 TIM_HandleTypeDef TIM1_Handle;  // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle;  // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
+
+IWDG_HandleTypeDef IwdgHandle = {0};
+WWDG_HandleTypeDef WwdgHandle = {0};
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
@@ -258,11 +269,13 @@ int main(void)
   
 
     // Initialize Main Timers
-	NBT_init(&main_chargecontroller_nbt, 10);
+    NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
-	NBT_init(&main_emergency_nbt, 10);
+    NBT_init(&main_emergency_nbt, 10);
     NBT_init(&main_ultrasonicsensor_nbt, 50);
     NBT_init(&main_blademotor_nbt, 100);
+    NBT_init(&main_drivemotor_nbt, 10);
+    NBT_init(&main_wdg_nbt,10);
 
     DB_TRACE(" * NBT Main timers initialized\r\n");     
 
@@ -281,33 +294,44 @@ int main(void)
     chirp(2);    
     while (1)
     {        
-        chatter_handler();
-        motors_handler();    
-        panel_handler();
-        spinOnce();                       
-        broadcast_handler(); 
+      chatter_handler();
+      motors_handler();    
+      panel_handler();
+      spinOnce();                       
+      broadcast_handler(); 
 
-        DRIVEMOTOR_App_Rx();
+      DRIVEMOTOR_App_Rx();
 
       if (NBT_handler(&main_chargecontroller_nbt))
 	    {            
-			ChargeController();
+			  ChargeController();
 	    }
         if (NBT_handler(&main_statusled_nbt))
 	    {            
-			StatusLEDUpdate();          
+			  StatusLEDUpdate();          
                        
             // DB_TRACE("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);           
 	    }
         if (NBT_handler(&main_ultrasonicsensor_nbt))
 	    {            
-			ULTRASONICSENSOR_App();                   
+			  ULTRASONICSENSOR_App();                   
 	    }
+
+      if (NBT_handler(&main_wdg_nbt))
+	    {            
+			  WATCHDOG_Refresh();                   
+	    }
+
+        if (NBT_handler(&main_drivemotor_nbt))
+	    {            
+        DRIVEMOTOR_App_10ms();      
+	    }
+      
         if (NBT_handler(&main_blademotor_nbt))
 	    {            
-			  BLADEMOTOR_App();  
-        DRIVEMOTOR_App_10ms();     
-        DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);            
+			  BLADEMOTOR_App();       
+        DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);
+        DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc, SOC);          
 	    }
         
 #ifndef I_DONT_NEED_MY_FINGERS
@@ -1013,7 +1037,7 @@ void ChargeController(void)
             chargecontrol_pwm_val++;
         }
 
-        if(charge_voltage >= (29.4/* + 0.6f*/)){
+        if(charge_voltage >= (29.4 )){
             charger_state = CHARGER_STATE_CHARGING_CV;
         }
         /*charger disconnected */
@@ -1031,21 +1055,25 @@ void ChargeController(void)
         }            
         if ((charge_voltage > (29.4f)) && (chargecontrol_pwm_val > 50))
         {
-            chargecontrol_pwm_val--;
+          chargecontrol_pwm_val--;
         }
 
         /* battery full ? */
         if (charge_current < CHARGE_END_LIMIT_CURRENT) {
           charger_state = CHARGER_STATE_END_CHARGING;
+          /*consider as the battery full */
+          ampere_acc = 2.8;
+          SOC = 100;
         }
         
         /*charger disconnected */
         if(chargerInputVoltage <= 0.2){
-            charger_state = CHARGER_STATE_IDLE;
+          charger_state = CHARGER_STATE_IDLE;
         }
         break;
 
     case CHARGER_STATE_END_CHARGING:
+
         chargecontrol_pwm_val = 0;
         /*charger disconnected */
         if(chargerInputVoltage <= 0.2){
@@ -1066,6 +1094,10 @@ void ChargeController(void)
         break;
     }
     
+    ampere_acc += ((current - charge_current_offset)/(100*60*60));
+    if(ampere_acc >= 2.8)ampere_acc = 2.8;
+    SOC = ampere_acc/2.8;
+
     chargecontrol_is_charging = charger_state;
 
     /*Check the PWM value for safety */
@@ -1216,6 +1248,69 @@ void MASTER_Transmit(uint8_t *buffer, uint8_t len)
     HAL_UART_Transmit_DMA(&MASTER_USART_Handler, (uint8_t*)master_tx_buffer, master_tx_buffer_len); // send message via UART       
 }
 
+static void WATCHDOG_vInit(void)
+{
+  #if defined(DB_ACTIVE)
+    /* setup DBGMCU block - stop IWDG at break in debug mode */
+    __DBGMCU_CLK_ENABLE();
+    __HAL_FREEZE_IWDG_DBGMCU();
+  #endif  /* DB_ACTIVE */
+
+  /* change the period to 50ms */
+  IwdgHandle.Instance = IWDG;
+  IwdgHandle.Init.Prescaler = IWDG_PRESCALER_256;
+  IwdgHandle.Init.Reload = 8U;
+  /* Enable IWDG (LSI automatically enabled by HW) */
+
+  /* if window feature is not applied Init() precedes Start() */
+  if( HAL_IWDG_Init(&IwdgHandle) != HAL_OK )
+  {
+    #ifdef DB_ACTIVE
+      DB_TRACE(" IWDG init Error\n\r");
+    #endif  /* DB_ACTIVE */
+  }
+
+  /* Initialize WWDG for run time if applicable */
+  #if defined(DB_ACTIVE)
+    /* setup DBGMCU block - stop WWDG at break in debug mode */
+    __DBGMCU_CLK_ENABLE();
+    __HAL_FREEZE_WWDG_DBGMCU();
+  #endif  /* DB_ACTIVE */
+
+  /* Setup period - 20ms */
+  __WWDG_CLK_ENABLE();
+  WwdgHandle.Instance = WWDG;
+  WwdgHandle.Init.Prescaler = WWDG_PRESCALER_8;
+  WwdgHandle.Init.Counter = 22; /* 20.02 ms*/
+  WwdgHandle.Init.Window = 9; /* 8.19 ms */
+  if( HAL_WWDG_Init(&WwdgHandle) != HAL_OK )
+  {
+    #ifdef DB_ACTIVE
+      DB_TRACE(" WWDG init Error\n\r");
+    #endif  /* DB_ACTIVE */
+  }
+} /* WATCHDOG_vInit() */
+
+static void WATCHDOG_Refresh(void){
+  /* Update WWDG counter */
+  WwdgHandle.Instance = WWDG;
+  if( HAL_WWDG_Refresh(&WwdgHandle) != HAL_OK )
+  {
+    #ifdef DB_ACTIVE
+      DB_TRACE(" WWDG refresh error\n\r");
+    #endif  /* DB_ACTIVE */
+
+  }
+
+  /* Reload IWDG counter */
+  IwdgHandle.Instance = IWDG;
+  if( HAL_IWDG_Refresh(&IwdgHandle) != HAL_OK )
+  {
+    #ifdef DB_ACTIVE
+      DB_TRACE(" IWDG refresh error\n\r");
+    #endif  /* DB_ACTIVE */
+  }
+}
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
   volatile int i = 0;
