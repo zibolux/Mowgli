@@ -27,12 +27,18 @@ extern "C" {
 
     #define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
-    /// nominal max charge current is 1 Amp
-    #define MAX_CHARGE_CURRENT                  1.0f
+    /// nominal max charge current is 1.5 Amp
+    #define MAX_CHARGE_CURRENT                  1.5f
+    /// limite voltag when switching in 150mA mode
+    #define LIMIT_VOLTAGE_150MA                 29.4f
+    /// Max voltage allowed 29.4 
+    #define MAX_CHARGE_VOLTAGE                 29.4f
     ///We consider the battery is full when in CV mode the current below 0.1A
-    #define CHARGE_END_LIMIT_CURRENT          0.08f
+    #define CHARGE_END_LIMIT_CURRENT            0.08f
     // if voltage is greater than this assume we are docked
-    #define MIN_CHARGE_VOLTAGE                  5.0f
+    #define MIN_DOCKED_VOLTAGE                  20.0f
+    // if voltage is lower this assume battery is disconnected 
+    #define MIN_BATTERY_VOLTAGE                  5.0f
     // must provide at least MIN_CHARGE_VOLTAGE when docked
     #define MIN_CHARGE_PWM                      500
     // if current is greater than this assume the battery is charging

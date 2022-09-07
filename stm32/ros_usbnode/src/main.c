@@ -78,6 +78,7 @@ typedef struct
     uint16_t chargerInput_voltage_raw;
 }__attribute__((__packed__))ADC_Data_t;
 
+
 volatile ADC_Data_t adc_buffer[ADC_NUMBER_MEASURE]={0};
 
 typedef enum{
@@ -88,16 +89,24 @@ typedef enum{
     CHARGER_STATE_END_CHARGING,
 } CHARGER_STATE_e;
 
+/* union to store a float in the U16 backup register */
+union FtoU{
+  float_t  f;
+  uint16_t u[2];
+};
+
 int blade_motor = 0;
 
 static uint8_t panel_rcvd_data;
 volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage;
-float SOC, ampere_acc = 0;
+
+union FtoU ampere_acc;
+union FtoU charge_current_offset;
 // exported via rostopics
+float_t SOC = 0;
 float_t battery_voltage;
 float_t charge_voltage;
 float_t charge_current;
-float_t charge_current_offset = -0.086f;
 uint16_t chargecontrol_pwm_val = MIN_CHARGE_PWM;
 uint8_t  chargecontrol_is_charging = 0;
 
@@ -119,6 +128,8 @@ TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
 
 IWDG_HandleTypeDef IwdgHandle = {0};
 WWDG_HandleTypeDef WwdgHandle = {0};
+
+RTC_HandleTypeDef hrtc = {0};
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
@@ -204,6 +215,8 @@ int main(void)
     DB_TRACE(" * 24V switched on\r\n");
     RAIN_Sensor_Init();
     DB_TRACE(" * RAIN Sensor enable\r\n");
+    HALLSTOP_Sensor_Init();
+    DB_TRACE(" * HALL Sensor enabled\r\n");
     
     if (SPIFLASH_TestDevice())
     {        
@@ -331,7 +344,8 @@ int main(void)
 	    {            
 			  BLADEMOTOR_App();       
         DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);
-        DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc, SOC);          
+        DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc.f, SOC.f);     
+
 	    }
         
 #ifndef I_DONT_NEED_MY_FINGERS
@@ -599,10 +613,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSI;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
@@ -624,13 +639,15 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_USB;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_USB | RCC_PERIPHCLK_RTC;
   PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
   PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
+
 }
 
 /*
@@ -725,14 +742,87 @@ void ADC1_Init(void)
 
    __HAL_LINKDMA(&ADC_Handle,DMA_Handle,hdma_adc);
 
-    // calibrate  - important for accuracy !
-    HAL_ADCEx_Calibration_Start(&ADC_Handle); 
-    memset(&adc_buffer[0],0,ADC_NUMBER_MEASURE*sizeof(ADC_Data_t));
-    HAL_ADC_Start_DMA(&ADC_Handle,(uint32_t*)&adc_buffer[0],320);
-    HAL_TIM_OC_Start(&TIM2_Handle,TIM_CHANNEL_2);
+  // calibrate  - important for accuracy !
+  HAL_ADCEx_Calibration_Start(&ADC_Handle); 
+  memset(&adc_buffer[0],0,ADC_NUMBER_MEASURE*sizeof(ADC_Data_t));
+  HAL_ADC_Start_DMA(&ADC_Handle,(uint32_t*)&adc_buffer[0],320);
+  HAL_TIM_OC_Start(&TIM2_Handle,TIM_CHANNEL_2);
+
+    /* USER CODE BEGIN RTC_MspInit 0 */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  /* USER CODE END RTC_MspInit 0 */
+  /* Enable BKP CLK enable for backup registers */
+  __HAL_RCC_BKP_CLK_ENABLE();
+  /* Peripheral clock enable */
+  __HAL_RCC_RTC_ENABLE();
+  /* USER CODE BEGIN RTC_MspInit 1 */
+  HAL_PWR_EnableBkUpAccess();
+
+  /* not sure if needed  TODO remove*/
+  hrtc.Instance = RTC;
+  hrtc.Init.AsynchPrediv = RTC_AUTO_1_SECOND;
+  hrtc.Init.OutPut = RTC_OUTPUTSOURCE_ALARM;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  ampere_acc.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1);
+  ampere_acc.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR2);
+
+  charge_current_offset.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR3);
+  charge_current_offset.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR4);
+
+  DB_TRACE("************************* BKP RAM : %d %d ******* %f \r\n", ampere_acc.u[0],ampere_acc.u[1], ampere_acc.f);
 }
 
  
+/**
+* @brief RTC MSP Initialization
+* This function configures the hardware resources used in this example
+* @param hrtc: RTC handle pointer
+* @retval None
+*/
+void HAL_RTC_MspInit(RTC_HandleTypeDef* hrtc)
+{
+  if(hrtc->Instance==RTC)
+  {
+  /* USER CODE BEGIN RTC_MspInit 0 */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  /* USER CODE END RTC_MspInit 0 */
+  /* Enable BKP CLK enable for backup registers */
+  __HAL_RCC_BKP_CLK_ENABLE();
+  /* Peripheral clock enable */
+  __HAL_RCC_RTC_ENABLE();
+  /* USER CODE BEGIN RTC_MspInit 1 */
+  HAL_PWR_EnableBkUpAccess();
+  /* USER CODE END RTC_MspInit 1 */
+  }
+
+}
+
+/**
+* @brief RTC MSP De-Initialization
+* This function freeze the hardware resources used in this example
+* @param hrtc: RTC handle pointer
+* @retval None
+*/
+void HAL_RTC_MspDeInit(RTC_HandleTypeDef* hrtc)
+{
+  if(hrtc->Instance==RTC)
+  {
+  /* USER CODE BEGIN RTC_MspDeInit 0 */
+
+  /* USER CODE END RTC_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_RTC_DISABLE();
+  /* USER CODE BEGIN RTC_MspDeInit 1 */
+
+  /* USER CODE END RTC_MspDeInit 1 */
+  }
+
+}
+
 /**
   * @brief TIM1 Initialization Function
   * @param None
@@ -1001,14 +1091,18 @@ void MX_DMA_Init(void)
  */
 void ChargeController(void)
 {                        
-    static CHARGER_STATE_e charger_state = CHARGER_STATE_IDLE;
-    static uint32_t timestamp = 0;
-    charge_voltage =  chargerVoltage;                    
-    battery_voltage = batteryVoltage;
-    charge_current = current - charge_current_offset;
+  static CHARGER_STATE_e charger_state = CHARGER_STATE_IDLE;
+  static uint32_t timestamp = 0;
+  charge_voltage =  chargerVoltage;                    
+  battery_voltage = batteryVoltage;
+  charge_current = current - charge_current_offset;
 
-    //DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);
+  //DB_TRACE(" charger_state : %d  V : %f \r\n", charger_state,chargerInputVoltage);
 
+  /*charger disconnected or Battery force idle state*/
+  if((chargerInputVoltage < MIN_DOCKED_VOLTAGE) || (battery_voltage < MIN_BATTERY_VOLTAGE) ){
+    charger_state = CHARGER_STATE_IDLE;
+  }
     
     switch (charger_state)
     {
@@ -1020,6 +1114,11 @@ void ChargeController(void)
         /* wait 100ms to read current */
         if( (HAL_GetTick() - timestamp) > 100){
             charge_current_offset = current;
+          // Writes a data in a RTC Backup data Register 3&4
+          HAL_PWR_EnableBkUpAccess();
+          HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR3, charge_current_offset.u[0]);    
+          HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR4, charge_current_offset.u[1]);   
+          HAL_PWR_DisableBkUpAccess(); 
             HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1); /* Power on the battery  Powerbus */
             charger_state = CHARGER_STATE_CHARGING_CC;
         }
@@ -1027,7 +1126,7 @@ void ChargeController(void)
         break;
 
     case CHARGER_STATE_CHARGING_CC:
-        // cap charge current at 1 Amps
+        // cap charge current at 1.5 Amps
         if ((charge_current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 50))
         {
             chargecontrol_pwm_val--;
@@ -1037,48 +1136,43 @@ void ChargeController(void)
             chargecontrol_pwm_val++;
         }
 
-        if(charge_voltage >= (29.4 )){
+        if(charge_voltage >= (LIMIT_VOLTAGE_150MA )){
             charger_state = CHARGER_STATE_CHARGING_CV;
-        }
-        /*charger disconnected */
-        if(chargerInputVoltage <= 0.2){
-            charger_state = CHARGER_STATE_IDLE;
         }
 
         break;
 
     case CHARGER_STATE_CHARGING_CV:
-        // set PWM to approach 29.4V charge voltage
-        if ((charge_voltage < (29.4f)) && (chargecontrol_pwm_val < 1350))
+        // set PWM to approach 29.4V  charge voltage
+        if ((charge_voltage < (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val < 1350))
         {
-            chargecontrol_pwm_val++;
+          chargecontrol_pwm_val++;
         }            
-        if ((charge_voltage > (29.4f)) && (chargecontrol_pwm_val > 50))
+        if ((charge_voltage > (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val > 50))
         {
           chargecontrol_pwm_val--;
         }
 
+        /* the current is limited to 150ma */
+        if ((charge_current > (MAX_CHARGE_CURRENT/10)))
+        {
+            chargecontrol_pwm_val--;
+        }
+
         /* battery full ? */
         if (charge_current < CHARGE_END_LIMIT_CURRENT) {
-          charger_state = CHARGER_STATE_END_CHARGING;
+          //charger_state = CHARGER_STATE_END_CHARGING;
           /*consider as the battery full */
-          ampere_acc = 2.8;
-          SOC = 100;
+          ampere_acc.f = 2.8;
+          SOC.f = 100;
         }
-        
-        /*charger disconnected */
-        if(chargerInputVoltage <= 0.2){
-          charger_state = CHARGER_STATE_IDLE;
-        }
+
         break;
 
     case CHARGER_STATE_END_CHARGING:
 
         chargecontrol_pwm_val = 0;
-        /*charger disconnected */
-        if(chargerInputVoltage <= 0.2){
-            charger_state = CHARGER_STATE_IDLE;
-        }
+
         break;
 
 
@@ -1094,9 +1188,15 @@ void ChargeController(void)
         break;
     }
     
-    ampere_acc += ((current - charge_current_offset)/(100*60*60));
-    if(ampere_acc >= 2.8)ampere_acc = 2.8;
-    SOC = ampere_acc/2.8;
+    ampere_acc.f += ((current - charge_current_offset)/(100*60*60));
+    if(ampere_acc.f >= 2.8)ampere_acc.f = 2.8;
+    SOC = ampere_acc.f/2.8;
+
+    // Writes a data in a RTC Backup data Register 1
+    HAL_PWR_EnableBkUpAccess();
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, ampere_acc.u[0]);    
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR2, ampere_acc.u[1]);   
+    HAL_PWR_DisableBkUpAccess(); 
 
     chargecontrol_is_charging = charger_state;
 
@@ -1334,8 +1434,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
 
   current = ((float)(current/4095.0f)*3.3f - 2.5f) * 100/12.0;
   chargerVoltage = (float)(chargerVoltage/4095.0f)*3.3f*16;
-  batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10 + 0.3f;
-  chargerInputVoltage = (chargerInputVoltage/4095.0f)*3.3f * (32/2) + 0.6f;
+  batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10.09 + 0.6f;
+  chargerInputVoltage = (chargerInputVoltage/4095.0f)*3.3f * (32/2);
 
 
 }
@@ -1356,9 +1456,10 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc){
     current = (float)l_u32Current_sum/(40);
     chargerVoltage = (float)l_u32ChargerVoltage_sum/(40);
     batteryVoltage = (float)l_u32BatVoltage_sum/(40);
+    chargerInputVoltage = (float)l_u32ChargerInputVoltage_sum/(40);
 
     current = ((float)(current/4095.0f)*3.3f - 2.5f) * 100/12.0;
     chargerVoltage = (float)(chargerVoltage/4095.0f)*3.3f*16;
-    batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10 + 0.3f;
-    chargerInputVoltage = (chargerInputVoltage/4095.0f)*3.3f * (32/2) + 0.6f;
+    batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10.09 + 0.6f;
+    chargerInputVoltage = (chargerInputVoltage/4095.0f)*3.3f * (32/2);
 }
