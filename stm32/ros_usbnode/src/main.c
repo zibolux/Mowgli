@@ -125,6 +125,7 @@ ADC_HandleTypeDef ADC_Handle;
 TIM_HandleTypeDef TIM1_Handle;  // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle;  // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
+TIM_HandleTypeDef TIM4_Handle;  // PWM Buzzer
 
 IWDG_HandleTypeDef IwdgHandle = {0};
 WWDG_HandleTypeDef WwdgHandle = {0};
@@ -279,8 +280,10 @@ int main(void)
 
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
     HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1);  
-  
 
+    TIM4_Init();
+    HAL_TIM_PWM_Start(&TIM4_Handle, TIM_CHANNEL_3); 
+    
     // Initialize Main Timers
     NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
@@ -290,7 +293,7 @@ int main(void)
     NBT_init(&main_drivemotor_nbt, 10);
     NBT_init(&main_wdg_nbt,10);
 
-    DB_TRACE(" * NBT Main timers initialized\r\n");     
+    DB_TRACE(" * NBT Main timers initialized\r\n");   
 
  #ifdef I_DONT_NEED_MY_FINGERS
     DB_TRACE("\r\n");
@@ -344,7 +347,7 @@ int main(void)
 	    {            
 			  BLADEMOTOR_App();       
         DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);
-        DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc.f, SOC.f);     
+        DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc.f, SOC);     
 
 	    }
         
@@ -772,8 +775,6 @@ void ADC1_Init(void)
 
   charge_current_offset.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR3);
   charge_current_offset.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR4);
-
-  DB_TRACE("************************* BKP RAM : %d %d ******* %f \r\n", ampere_acc.u[0],ampere_acc.u[1], ampere_acc.f);
 }
 
  
@@ -1031,6 +1032,8 @@ void TIM3_Init(void)
   {
     Error_Handler();
   }
+
+  
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
@@ -1044,8 +1047,72 @@ void TIM3_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  *
+  * Buzzer is on PD14 (PWM)
+  * 
+  * @param None
+  * @retval None
+  */
+void TIM4_Init(void)
+{
+  __HAL_RCC_TIM4_CLK_ENABLE();
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  TIM4_Handle.Instance = TIM4;
+  TIM4_Handle.Init.Prescaler = 36000; // 72Mhz -> 2khz
+  TIM4_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+  TIM4_Handle.Init.Period = 50;
+  TIM4_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  TIM4_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&TIM4_Handle) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&TIM4_Handle, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&TIM4_Handle) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&TIM4_Handle, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&TIM4_Handle, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  __HAL_AFIO_REMAP_TIM4_ENABLE();        // to use PD14 it is a full remap
+
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  /**TIM4 GPIO Configuration
+  PD14    ------> TIM4_CH3
+  */
+  GPIO_InitTypeDef GPIO_InitStruct = {0};  
+  GPIO_InitStruct.Pin = GPIO_PIN_14;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);  
 
 }
+
 
 /**
   * Enable DMA controller clock
@@ -1084,7 +1151,7 @@ void MX_DMA_Init(void)
 
 
 /*
- * manaes the charge voltage, and charge, lowbat LED
+ * manages the charge voltage, and charge, lowbat LED
  * improvementt need to be done to avoid sparks when connected charger and disconnected 
  * todo PID current measure
  * needs to be called frequently
@@ -1095,12 +1162,12 @@ void ChargeController(void)
   static uint32_t timestamp = 0;
   charge_voltage =  chargerVoltage;                    
   battery_voltage = batteryVoltage;
-  charge_current = current - charge_current_offset;
+  charge_current = current - charge_current_offset.f;
 
   //DB_TRACE(" charger_state : %d  V : %f \r\n", charger_state,chargerInputVoltage);
 
-  /*charger disconnected or Battery force idle state*/
-  if((chargerInputVoltage < MIN_DOCKED_VOLTAGE) || (battery_voltage < MIN_BATTERY_VOLTAGE) ){
+  /*charger disconnected force idle state*/
+  if((chargerInputVoltage < MIN_DOCKED_VOLTAGE) ){
     charger_state = CHARGER_STATE_IDLE;
   }
     
@@ -1113,7 +1180,7 @@ void ChargeController(void)
 
         /* wait 100ms to read current */
         if( (HAL_GetTick() - timestamp) > 100){
-            charge_current_offset = current;
+            charge_current_offset.f = current;
           // Writes a data in a RTC Backup data Register 3&4
           HAL_PWR_EnableBkUpAccess();
           HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR3, charge_current_offset.u[0]);    
@@ -1164,7 +1231,7 @@ void ChargeController(void)
           //charger_state = CHARGER_STATE_END_CHARGING;
           /*consider as the battery full */
           ampere_acc.f = 2.8;
-          SOC.f = 100;
+          SOC = 100;
         }
 
         break;
@@ -1188,7 +1255,7 @@ void ChargeController(void)
         break;
     }
     
-    ampere_acc.f += ((current - charge_current_offset)/(100*60*60));
+    ampere_acc.f += ((current - charge_current_offset.f)/(100*60*60));
     if(ampere_acc.f >= 2.8)ampere_acc.f = 2.8;
     SOC = ampere_acc.f/2.8;
 
@@ -1292,9 +1359,9 @@ void chirp(uint8_t count)
 
     for (i=0;i<count;i++)
     {
-        TIM3_Handle.Instance->CCR4 = 10;   
+        TIM3_Handle.Instance->CCR4 = 10;    
         HAL_Delay(100);
-        TIM3_Handle.Instance->CCR4 = 0;  
+        TIM3_Handle.Instance->CCR4 = 0;   
         HAL_Delay(50);
     }
 }
