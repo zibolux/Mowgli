@@ -84,7 +84,7 @@ typedef enum
 #endif
    
 
-UART_HandleTypeDef PANEL_USART_Handler;
+extern UART_HandleTypeDef PANEL_USART_Handler;
 
 void PANEL_Init(void);
 void PANEL_Tick(void);
@@ -92,7 +92,7 @@ void PANEL_Tick(void);
 void PANEL_Set_LED(uint8_t led, PANEL_LED_STATE state);
 int PANEL_Get_Key_Pressed(void);
 
-void PANEL_Handle_Received_Data(uint8_t rcvd_data);
+void PANEL_ReceiceIT(void);
 
 extern uint16_t buttonstate[PANEL_BUTTON_BYTES];
 extern uint8_t buttonupdated;

@@ -116,7 +116,6 @@ UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
 SPI_HandleTypeDef SPI3_Handle;
 
 // Drive Motors DMA
-
 DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart4_tx;
 DMA_HandleTypeDef hdma_adc;
@@ -136,6 +135,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
    // do nothing here
 }
+
+
 
 /*
  * called when DMA transfer completes
@@ -164,23 +165,18 @@ void HAL_UART_TxHalfCpltCallback(UART_HandleTypeDef *huart)
  */ 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {           
-       if (huart->Instance == MASTER_USART_INSTANCE)
-       {
-            ULTRASONICSENSOR_ReceiceIT();       
-       }
-       else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
-       {
-            BLADEMOTOR_ReceiceIT();
-       }
-       else if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
-       {
-        DRIVEMOTOR_ReceiceIT();
-       }       
-       else if(huart->Instance == PANEL_USART_INSTANCE)
-       {
-           PANEL_Handle_Received_Data(panel_rcvd_data);
-           HAL_UART_Receive_IT(&PANEL_USART_Handler, &panel_rcvd_data, 1);   // rearm interrupt               
-       }
+  if (huart->Instance == MASTER_USART_INSTANCE)
+  {
+    ULTRASONICSENSOR_ReceiceIT();       
+  }
+  else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
+  {
+    BLADEMOTOR_ReceiceIT();
+  }
+  else if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
+  {
+    DRIVEMOTOR_ReceiceIT();
+  }       
 }
 
 int main(void)
@@ -271,12 +267,6 @@ int main(void)
         BLADEMOTOR_Init();
     #endif
     
-
-   // HAL_UART_Receive_IT(&MASTER_USART_Handler, &master_rcvd_data, 1);
-    DB_TRACE(" * Master Interrupt enabled\r\n");
-    
-    HAL_UART_Receive_IT(&PANEL_USART_Handler, &panel_rcvd_data, 1);   // rearm interrupt               
-    DB_TRACE(" * Panel Interrupt enabled\r\n");
 
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
     HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1);  
@@ -1134,6 +1124,12 @@ void MX_DMA_Init(void)
   /* DMA1_Channel3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+  /* DMA1_Channel4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
   /* DMA1_Channel6_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);

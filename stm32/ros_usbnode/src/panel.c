@@ -18,108 +18,45 @@
 #include "board.h"
 #include "main.h"
 
+#define PANEL_LENGTH_INIT_MSG 22
+#define PANEL_LENGTH_RQST_MSG 18
+#define PANEL_LENGTH_RECEIVED_MSG 20
+
+
+UART_HandleTypeDef PANEL_USART_Handler;
+DMA_HandleTypeDef hdma_uart1_rx;
+DMA_HandleTypeDef hdma_uart1_tx;
+
 uint16_t buttonstate[PANEL_BUTTON_BYTES];
 uint8_t buttonupdated = 0; // 1 if buttonstate was updated by the panel
 uint8_t buttoncleared = 0;
 
 /* per panel type initializers */
-#ifdef PANEL_TYPE_YARDFORCE_900_ECO
+#if PANEL_TYPE == PANEL_TYPE_YARDFORCE_900_ECO
     const uint8_t KEY_INIT_MSG[] = {0x03, 0x90, 0x28};     
-    const uint8_t KEY_ACTIVATE[] = {0x0, 0x0, 0x1};
+#elif PANEL_TYPE == PANEL_TYPE_YARDFORCE_500_CLASSIC
+    const uint8_t KEY_INIT_MSG[] = {0x06, 0x50, 0xe0};       
+#elif PANEL_TYPE ==PANEL_TYPE_YARDFORCE_LUV1000RI
+    const uint8_t KEY_INIT_MSG[] = {0x03, 0x99, 0x21};
+#else 
+    #error "No panel type define in board.h"
 #endif
 
-#ifdef PANEL_TYPE_YARDFORCE_500_CLASSIC
-    const uint8_t KEY_INIT_MSG[] = {0x06, 0x50, 0xe0};    
-    const uint8_t KEY_ACTIVATE[] = {0x0, 0x0, 0x1};    
-#endif
+const uint8_t KEY_ACTIVATE[] = {0x0, 0x0, 0x1};
 
-#ifdef PANEL_TYPE_YARDFORCE_LUV1000RI
-    const uint8_t KEY_INIT_MSG[] = {0x03, 0x99, 0x21};    
-    const uint8_t KEY_ACTIVATE[] = {0x0, 0x0, 0x1};    
-#endif
 
+static uint8_t panel_pu8ReceivedData[50] = {0};
+static uint8_t panel_pu8RqstMessage[50]  = {0};
+
+const uint8_t panel_pcu8PreAmbule[5]  = {0x55,0xAA,0x0A,0x50,0x3C};
 
 static uint8_t Led_States[LED_STATE_SIZE];
 
-static uint8_t SendBuffer[256];
-static uint8_t ReceiveBuffer[256];
-static uint8_t ReceiveIndex = 0;
-static uint8_t ReceiveLength;
-static uint8_t ReceiveCRC;
 // static uint8_t Key_Pressed;
 static uint8_t Frame_Received_Panel = 0;
 
 
-
-void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command)
-{
-    uint8_t ptr = 0;
-
-    SendBuffer[ptr++] = 0x55;
-    SendBuffer[ptr++] = 0xaa;
-    SendBuffer[ptr++] = dataLength + 0x02;
-    SendBuffer[ptr++] = command >> 8;
-    SendBuffer[ptr++] = command & 0xff;
-
-    for (int i = 0; i < dataLength; ++i)
-    {
-        SendBuffer[ptr++] = data[i];
-    }
-
-    uint8_t crc = 0;
-    for (int i = 0; i < dataLength + 5; ++i)
-    {
-        crc += SendBuffer[i];
-    }
-    SendBuffer[dataLength + 5] = crc;
-
-    
-  //   msgPrint(SendBuffer, dataLength+6);
-#ifdef PANEL_USART_ENABLED
-    HAL_UART_Transmit(&PANEL_USART_Handler, SendBuffer, dataLength + 6, 250);
-#endif
-}
-
-
-
-/*
- * called by the UART ISR to process received messages
- * basically we check them for correct frameing and CRC
- * and then extract the data
- */
-void PANEL_Handle_Received_Data(uint8_t rcvd_data)
-{
-    if (ReceiveIndex == 0 && rcvd_data == 0x55) /* PREAMBLE */
-    {
-        ReceiveCRC = rcvd_data;
-        ReceiveBuffer[ReceiveIndex++] = rcvd_data;
-    }
-    else if (ReceiveIndex == 1 && rcvd_data == 0xAA) /* PREAMBLE */
-    {
-        ReceiveCRC += rcvd_data;
-        ReceiveBuffer[ReceiveIndex++] = rcvd_data;
-    }
-    else if (ReceiveIndex == 2) /* LEN */
-    {
-        ReceiveLength = rcvd_data;
-        ReceiveBuffer[ReceiveIndex++] = rcvd_data;
-        ReceiveCRC += rcvd_data;
-    }
-    else if (ReceiveIndex >= 3 && ReceiveIndex <= 2 + ReceiveLength) /* DATA bytes */
-    {
-        ReceiveBuffer[ReceiveIndex++] = rcvd_data;
-        ReceiveCRC += rcvd_data;
-    }
-    else if (ReceiveIndex >= 3 + ReceiveLength) /* CRC byte */
-    {
-        if (ReceiveCRC == rcvd_data)
-        {
-           // Key_Pressed = 1;
-            Frame_Received_Panel = 1;
-        }
-        ReceiveIndex = 0;
-    }
-}
+void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command);
 
 /*
  * Initialize HW, USART and send init sequence to panel
@@ -134,7 +71,7 @@ void PANEL_Init(void)
 
     // RX
     GPIO_InitStruct.Pin = PANEL_USART_RX_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_INPUT;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(PANEL_USART_RX_PORT, &GPIO_InitStruct);
@@ -142,7 +79,6 @@ void PANEL_Init(void)
     // TX
     GPIO_InitStruct.Pin = PANEL_USART_TX_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    // GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(PANEL_USART_TX_PORT, &GPIO_InitStruct);
 
@@ -158,10 +94,47 @@ void PANEL_Init(void)
 
     HAL_UART_Init(&PANEL_USART_Handler); // HAL_UART_Init() Will enable UART1
 
+    
+    /* UART1 DMA Init */
+    /* UART1_RX Init */    
+    hdma_uart1_rx.Instance = DMA1_Channel5;
+    hdma_uart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_uart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_uart1_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_uart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_uart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_uart1_rx.Init.Mode = DMA_NORMAL;
+    hdma_uart1_rx.Init.Priority = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&hdma_uart1_rx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(&PANEL_USART_Handler,hdmarx,hdma_uart1_rx);
+    
+    /* UART4 DMA Init */
+    /* UART4_TX Init */
+    hdma_uart1_tx.Instance = DMA1_Channel4;
+    hdma_uart1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_uart1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_uart1_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_uart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_uart1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_uart1_tx.Init.Mode = DMA_NORMAL;
+    hdma_uart1_tx.Init.Priority = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&hdma_uart1_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+   
+
+    __HAL_LINKDMA(&PANEL_USART_Handler,hdmatx,hdma_uart1_tx);
+
     HAL_NVIC_SetPriority(PANEL_USART_IRQ, 0, 0);
 	HAL_NVIC_EnableIRQ(PANEL_USART_IRQ);     
+    __HAL_UART_ENABLE_IT(&PANEL_USART_Handler, UART_IT_TC);
 
-
+    /* TODO maybe put this sequence in the loop */
     memset(Led_States, 0x0, LED_STATE_SIZE);       // all LEDs OFF
     // Initialize Panel Sequence
     PANEL_Send_Message(NULL, 0, 0xffff);
@@ -180,24 +153,25 @@ void PANEL_Init(void)
         {
             memset(Led_States, 0x0, LED_STATE_SIZE);
             PANEL_Set_LED(i, PANEL_LED_ON);
-            PANEL_Send_Message(Led_States, sizeof(Led_States), LED_CMD);     
-            PANEL_Send_Message((uint8_t*)KEY_ACTIVATE, sizeof(KEY_ACTIVATE), 0x5084);
+            PANEL_SendLEDMessage();
             HAL_Delay(50);
         }
         for (i=11;i>=4;i--)
         {
             memset(Led_States, 0x0, LED_STATE_SIZE);
             PANEL_Set_LED(i, PANEL_LED_ON);
-            PANEL_Send_Message(Led_States, sizeof(Led_States), LED_CMD);     
-            PANEL_Send_Message((uint8_t*)KEY_ACTIVATE, sizeof(KEY_ACTIVATE), 0x5084);
+            PANEL_SendLEDMessage();
             HAL_Delay(50);
         }
     }
     // all off
     HAL_Delay(50);
     memset(Led_States, 0x0, LED_STATE_SIZE);    
-    PANEL_Send_Message(Led_States, sizeof(Led_States), LED_CMD);     
-    PANEL_Send_Message((uint8_t*)KEY_ACTIVATE, sizeof(KEY_ACTIVATE), 0x5084);
+    PANEL_SendLEDMessage();
+
+    /* prepare to receive the next message */
+    HAL_UARTEx_ReceiveToIdle_DMA(&PANEL_USART_Handler,panel_pu8ReceivedData,PANEL_LENGTH_RECEIVED_MSG);
+    __HAL_DMA_DISABLE_IT(&hdma_uart1_rx, DMA_IT_HT);
 
 #endif
 }
@@ -235,9 +209,6 @@ void PANEL_Tick(void)
 {   
      if (Frame_Received_Panel == 1)
      {
-      if (ReceiveBuffer[0] == 0x55 && ReceiveBuffer[1] == 0xaa && ReceiveBuffer[3] == 0x50) // & ReceiveBuffer[2]==0x02  & ReceiveBuffer[4]==0x00)
-      {
-        
             //debug_printf("%x %x %x | %x %x %x \r\n",ReceiveBuffer[2],ReceiveBuffer[3],ReceiveBuffer[4], ReceiveBuffer[5], ReceiveBuffer[6], ReceiveBuffer[7]);
             /* if (ReceiveBuffer[5]==0x02) debug_printf("key: timer\r\n");
             if (ReceiveBuffer[6]==0x02) debug_printf("key: S1\r\n");
@@ -252,12 +223,12 @@ void PANEL_Tick(void)
             if (ReceiveBuffer[15]==0x02) debug_printf("key: Sat\r\n");
             if (ReceiveBuffer[16]==0x02) debug_printf("key: Sun\r\n");
             */
-            if ((ReceiveBuffer[5]&0x1) == 0) // any button pressed
+            if ((panel_pu8ReceivedData[5]&0x1) == 0) // any button pressed
             {
                for(int button_byte=0;button_byte < PANEL_BUTTON_BYTES;button_byte++)
                 {
                
-                    buttonstate[button_byte] = ReceiveBuffer[button_byte+5];//&0x3;
+                    buttonstate[button_byte] = panel_pu8ReceivedData[button_byte+5];//&0x3;
                     buttonupdated = 1;
                     buttoncleared = 0;
                 }
@@ -275,7 +246,6 @@ void PANEL_Tick(void)
                 }
             }
     
-      }
       Frame_Received_Panel=0;
      }
      
@@ -283,16 +253,101 @@ void PANEL_Tick(void)
     // uncomment to flash charging led as a test
     // PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_FAST);
     
-#ifdef PANEL_USART_ENABLED    
-     PANEL_Send_Message(Led_States, sizeof(Led_States), LED_CMD);     
-     PANEL_Send_Message((uint8_t*)KEY_ACTIVATE, sizeof(KEY_ACTIVATE), 0x5084);     
+#ifdef PANEL_USART_ENABLED   
+    PANEL_SendLEDMessage();
 #endif
 }
-/*
-int PANEL_Get_Key_Pressed(void)
-{
-    uint8_t result = Key_Pressed;
-    Key_Pressed = 0;
-    return result;
+
+void PANEL_SendLEDMessage(void){
+    uint8_t ptr = 0;
+    uint8_t crc = 0;
+
+    while( __HAL_UART_GET_FLAG(&PANEL_USART_Handler, USART_FLAG_TC) != 1);
+
+    panel_pu8RqstMessage[ptr++] = 0x55;
+    panel_pu8RqstMessage[ptr++] = 0xaa;
+    panel_pu8RqstMessage[ptr++] = LED_STATE_SIZE + 0x02;
+    panel_pu8RqstMessage[ptr++] = LED_CMD >> 8;
+    panel_pu8RqstMessage[ptr++] = LED_CMD & 0xff;
+
+    for (int i = 0; i < LED_STATE_SIZE; ++i)
+    {
+        panel_pu8RqstMessage[ptr++] = Led_States[i];
+    }
+
+
+    for (int i = 0; i < LED_STATE_SIZE + 5; ++i)
+    {
+        crc += panel_pu8RqstMessage[i];
+    }
+    panel_pu8RqstMessage[ptr++] = crc;
+
+    panel_pu8RqstMessage[ptr++] = 0x55;
+    panel_pu8RqstMessage[ptr++] = 0xaa;
+    panel_pu8RqstMessage[ptr++] = 0x05;
+    panel_pu8RqstMessage[ptr++] = 0x50;
+    panel_pu8RqstMessage[ptr++] = 0x84;
+    panel_pu8RqstMessage[ptr++] = KEY_ACTIVATE[0];
+    panel_pu8RqstMessage[ptr++] = KEY_ACTIVATE[1];
+    panel_pu8RqstMessage[ptr++] = KEY_ACTIVATE[2];
+    panel_pu8RqstMessage[ptr++] = 0xD9; /* will change if key change */
+
+#ifdef PANEL_USART_ENABLED
+    HAL_UART_Transmit_DMA(&PANEL_USART_Handler, (uint8_t*)&panel_pu8RqstMessage[0], ptr); 
+#endif
+
 }
-*/
+
+void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command)
+{
+    uint8_t ptr = 0;
+
+    while( __HAL_UART_GET_FLAG(&PANEL_USART_Handler, USART_FLAG_TC) != 1);
+
+    panel_pu8RqstMessage[ptr++] = 0x55;
+    panel_pu8RqstMessage[ptr++] = 0xaa;
+    panel_pu8RqstMessage[ptr++] = dataLength + 0x02;
+    panel_pu8RqstMessage[ptr++] = command >> 8;
+    panel_pu8RqstMessage[ptr++] = command & 0xff;
+
+    for (int i = 0; i < dataLength; ++i)
+    {
+        panel_pu8RqstMessage[ptr++] = data[i];
+    }
+
+    uint8_t crc = 0;
+    for (int i = 0; i < dataLength + 5; ++i)
+    {
+        crc += panel_pu8RqstMessage[i];
+    }
+    panel_pu8RqstMessage[dataLength + 5] = crc;
+
+    
+#ifdef PANEL_USART_ENABLED
+    HAL_UART_Transmit_DMA(&PANEL_USART_Handler, (uint8_t*)&panel_pu8RqstMessage[0], dataLength + 6); 
+#endif
+}
+
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+{
+	if (huart->Instance == PANEL_USART_INSTANCE)
+	{
+        /* take only the buttons message */
+        if(Size == PANEL_LENGTH_RECEIVED_MSG ){
+                    /* decode the frame */
+            if(memcmp(panel_pcu8PreAmbule,panel_pu8ReceivedData,5) == 0){
+                uint8_t l_u8crc = crcCalc(panel_pu8ReceivedData,14-1);
+                if(panel_pu8ReceivedData[14-1] == l_u8crc ){
+                    Frame_Received_Panel = 1;
+                }
+            }
+        }
+
+
+        /* prepare to receive the next message */
+        HAL_UARTEx_ReceiveToIdle_DMA(&PANEL_USART_Handler,panel_pu8ReceivedData,PANEL_LENGTH_RECEIVED_MSG);
+        __HAL_DMA_DISABLE_IT(&hdma_uart1_rx, DMA_IT_HT);
+
+	}
+}
