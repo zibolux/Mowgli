@@ -39,6 +39,7 @@
 #include "std_srvs/Empty.h"
 
 // IMU
+#include "imu/wt901.h"
 #include "imu/imu.h"
 #include "sensor_msgs/Imu.h"
 #include "sensor_msgs/MagneticField.h"
@@ -415,7 +416,6 @@ extern "C" void broadcast_handler()
 		imu_msg.linear_acceleration.x = imu_msg.linear_acceleration.y = imu_msg.linear_acceleration.z = 0;		
 		imu_msg.linear_acceleration_covariance[0] = -1;
 #endif
-
 		/**********************************/
 		/* Exernal Gyro					  */
 		/**********************************/

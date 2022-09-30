@@ -15,7 +15,8 @@
 #include <math.h>
 
 #include "imu/imu.h"
-#include "imu/altimu-10v5.h"
+//#include "imu/altimu-10v5.h"
+#include "imu/wt901.h"
 #include "i2c.h"
 #include "main.h"
 #include "spiflash.h"
@@ -286,7 +287,8 @@ void IMU_Calibrate()
 
     /***************************************************/
     /* load magnetometer calibration (hard/soft iron)  */
-    /****************************************************/    
+    /****************************************************/  
+    /*  
     onboard_imu_mag_bias[0] = SPIFLASH_ReadDouble("mag_bias_x");
     onboard_imu_mag_bias[1] = SPIFLASH_ReadDouble("mag_bias_y");
     onboard_imu_mag_bias[2] = SPIFLASH_ReadDouble("mag_bias_z");
@@ -308,6 +310,7 @@ void IMU_Calibrate()
     debug_printf("       [ %f\t%f\t%f\r\n", onboard_imu_mag_cal_matrix[0][0], onboard_imu_mag_cal_matrix[0][1], onboard_imu_mag_cal_matrix[0][2]); 
     debug_printf("         %f\t%f\t%f\r\n", onboard_imu_mag_cal_matrix[1][0], onboard_imu_mag_cal_matrix[1][1], onboard_imu_mag_cal_matrix[1][2]); 
     debug_printf("         %f\t%f\t%f ]\r\n", onboard_imu_mag_cal_matrix[2][0], onboard_imu_mag_cal_matrix[2][1], onboard_imu_mag_cal_matrix[2][2]);     
+    */
 }
 
 

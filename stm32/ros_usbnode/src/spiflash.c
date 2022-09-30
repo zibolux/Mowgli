@@ -179,12 +179,12 @@ void SPIFLASH_Config(void)
 void SPIFLASH_IncBootCounter(void)
 {
     SPI3_Init();
-    debug_printf("   >> LittleFS: mounting ... ");
+    //debug_printf("   >> LittleFS: mounting ... ");
     int err = lfs_mount(&lfs, &cfg);
     // reformat if we can't mount the filesystem
     // this should only happen on the first boot
     if (err) {
-        debug_printf("ERROR: no valid filesystem found, formatting ...");
+        //debug_printf("ERROR: no valid filesystem found, formatting ...");
         lfs_format(&lfs, &cfg);        
         err = lfs_mount(&lfs, &cfg);
     }

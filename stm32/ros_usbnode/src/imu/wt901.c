@@ -23,10 +23,10 @@
 /******************************************************************************
 * Module Preprocessor Constants
 *******************************************************************************/
-#define WT901_ADDRESS 0xA0
+#define WT901_ADDRESS 0x50
 
 #define WT901_G_FACTOR 16/32768
-#define WT901_DPS_FACTOR 2000/32768   
+#define WT901_DPS_FACTOR 2000/32768
 #define WT901_T_FACTOR 0.00015f    
 
 #define DIO_MODE_AIN 0
@@ -128,14 +128,14 @@ typedef enum {
   * @retval          0 -> test failed 1-> test ok, good to init and use
   *
   */
-uint8_t WT901_TestDevice(void)
+uint8_t IMU_TestDevice(void)
 {
     uint8_t  val;
     uint8_t  l_u8return = 0;
 
     /* test the LSM6DS33 (gyro and accelerometer) */
     val = SW_I2C_UTIL_Read(WT901_ADDRESS,(uint8_t)IICADDR);
-    if (val == (WT901_ADDRESS>>1)) /* should be 0x50 */
+    if (val == (WT901_ADDRESS)) /* should be 0x50 */
     {
         DB_TRACE("   >> WT901 FOUND at I2C addr=0x%0x\r\n", WT901_ADDRESS);
         l_u8return = 1;
@@ -154,7 +154,7 @@ uint8_t WT901_TestDevice(void)
   * @brief  Initialize IMU
   *  
   */
-void WT901_Init(void)
+void IMU_Init(void)
 {
     /* default values are OK
     *  maybe set it but need to restart the module 
@@ -165,45 +165,45 @@ void WT901_Init(void)
   * @brief  Reads the 3 accelerometer channels and stores them in *x,*y,*z
   * units are m/s^2
   */
-void WT901_ReadAccelerometerRaw(float *x, float *y, float *z)
+void IMU_ReadAccelerometerRaw(float *x, float *y, float *z)
 {
     uint8_t accel_xyz[6];   // 2 bytes each
 
     SW_I2C_UTIL_Read_Multi(WT901_ADDRESS, AX, 6, (uint8_t*)accel_xyz);
 
-    *x =  (int16_t)(accel_xyz[1] << 8 | accel_xyz[0]) * WT901_G_FACTOR * MS2_PER_G;
-    *y =  (int16_t)(accel_xyz[3] << 8 | accel_xyz[2]) * WT901_G_FACTOR * MS2_PER_G;
-    *z =  (int16_t)(accel_xyz[5] << 8 | accel_xyz[4]) * WT901_G_FACTOR * MS2_PER_G;    
+    *x =  (float)(int16_t)(accel_xyz[1] << 8 | accel_xyz[0]) * WT901_G_FACTOR * MS2_PER_G;
+    *y =  (float)(int16_t)(accel_xyz[3] << 8 | accel_xyz[2]) * WT901_G_FACTOR * MS2_PER_G;
+    *z =  (float)(int16_t)(accel_xyz[5] << 8 | accel_xyz[4]) * WT901_G_FACTOR * MS2_PER_G;    
 }
 
 /**
   * @brief  Reads the 3 gyro channels and stores them in *x,*y,*z
   * units are rad/sec
   */
-void WT901_ReadGyroRaw(float *x, float *y, float *z)
+void IMU_ReadGyroRaw(float *x, float *y, float *z)
 {
     uint8_t gyro_xyz[6];   // 2 bytes each
 
     SW_I2C_UTIL_Read_Multi(WT901_ADDRESS, GX, 6, (uint8_t*)&gyro_xyz);
     
-    *x = (int16_t)(gyro_xyz[1] << 8 | gyro_xyz[0]) * WT901_DPS_FACTOR * RAD_PER_G;
-    *y = (int16_t)(gyro_xyz[3] << 8 | gyro_xyz[2]) * WT901_DPS_FACTOR * RAD_PER_G;
-    *z = (int16_t)(gyro_xyz[5] << 8 | gyro_xyz[4]) * WT901_DPS_FACTOR * RAD_PER_G;    
+    *x = (float)(int16_t)(gyro_xyz[1] << 8 | gyro_xyz[0]) * WT901_DPS_FACTOR * RAD_PER_G;
+    *y = (float)(int16_t)(gyro_xyz[3] << 8 | gyro_xyz[2]) * WT901_DPS_FACTOR * RAD_PER_G;
+    *z = (float)(int16_t)(gyro_xyz[5] << 8 | gyro_xyz[4]) * WT901_DPS_FACTOR * RAD_PER_G;    
 }
 
 /**
   * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
   * units are tesla uncalibrated
   */
-void WT901_ReadMagnetometerRaw(double *x, double *y, double *z)
+void IMU_ReadMagnetometerRaw(double *x, double *y, double *z)
 {
     uint8_t mag_xyz[6];   // 2 bytes each
 
     SW_I2C_UTIL_Read_Multi(WT901_ADDRESS, HX, 6, (uint8_t*)&mag_xyz);
 
-    *x = (int16_t)(mag_xyz[1] << 8 | mag_xyz[0]) * WT901_T_FACTOR;
-    *y = (int16_t)(mag_xyz[3] << 8 | mag_xyz[2]) * WT901_T_FACTOR;
-    *z = (int16_t)(mag_xyz[5] << 8 | mag_xyz[4]) * WT901_T_FACTOR;     
+    *x = (float)(int16_t)(mag_xyz[1] << 8 | mag_xyz[0]) * WT901_T_FACTOR;
+    *y = (float)(int16_t)(mag_xyz[3] << 8 | mag_xyz[2]) * WT901_T_FACTOR;
+    *z = (float)(int16_t)(mag_xyz[5] << 8 | mag_xyz[4]) * WT901_T_FACTOR;     
 }
 
 /**
@@ -211,7 +211,7 @@ void WT901_ReadMagnetometerRaw(double *x, double *y, double *z)
   * (internal function only)
   * @retval float temp in °C
   */
-float WT901_TempRaw(void)
+float IMU_TempRaw(void)
 {
     uint8_t temp[2];   
     float retval; // temp

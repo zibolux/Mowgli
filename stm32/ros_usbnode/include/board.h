@@ -6,6 +6,11 @@
 extern "C" {
 #endif
 
+// this is the sofware version that any other Mowgli components like MowgliRover will match against
+
+#define MOWGLI_SW_VERSION_MAJOR              1
+#define MOWGLI_SW_VERSION_BRANCH             0              /* even = stable, odd = testing/unstable */
+#define MOWGLI_SW_VERSION_MINOR              1
 
 /*
  * at the moment this really only works for BOARD_YARDFORCE500
@@ -21,6 +26,13 @@ extern "C" {
     //#define PANEL_TYPE_YARDFORCE_500_CLASSIC    1
     // #define PANEL_TYPE_YARDFORCE_900_ECO   1
     #define PANEL_TYPE_YARDFORCE_LUV1000RI       1
+
+    #define DEBUG_TYPE_UART 1 
+    #define DEBUG_TYPE_SWO 2
+
+    #define DEBUG_TYPE DEBUG_TYPE_SWO
+
+    #define OPTION_ULTRASONIC 1
 
     // define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
     //#define SUPPORT_ROS_CALIBRATION_IMU           1     
@@ -56,8 +68,8 @@ extern "C" {
     // IMU configuration options
     #define IMU_ONBOARD_ACCELERATION            1
     #define IMU_ONBOARD_TEMP                    1
-    //#define IMU_ACCELERATION                    1       // external IMU
-    //#define IMU_ANGULAR                         1       // external IMU
+    #define IMU_ACCELERATION                    1       // external IMU
+    #define IMU_ANGULAR                         1       // external IMU
     
     // we use J18 (Red 9 pin connector as Master Serial Port)
     #define MASTER_J18 1
@@ -232,9 +244,9 @@ extern "C" {
 
     // J18 has the SPI3 pins, as we dont use SPI3, we recycle them for I2C Bitbanging (for our Pololu ALtIMU-10v5)
     #ifdef SOFT_I2C_ENABLED
-        #define SOFT_I2C_SCL_PIN GPIO_PIN_4
+        #define SOFT_I2C_SCL_PIN GPIO_PIN_5
         #define SOFT_I2C_SCL_PORT GPIOB
-        #define SOFT_I2C_SDA_PIN GPIO_PIN_5
+        #define SOFT_I2C_SDA_PIN GPIO_PIN_4
         #define SOFT_I2C_SDA_PORT GPIOB
 
         #define SOFT_I2C_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE();

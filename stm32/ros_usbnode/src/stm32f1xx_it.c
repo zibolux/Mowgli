@@ -75,6 +75,9 @@ extern DMA_HandleTypeDef hdma_uart3_rx;
 extern DMA_HandleTypeDef hdma_uart4_tx;
 extern DMA_HandleTypeDef hdma_uart4_rx;
 extern DMA_HandleTypeDef hdma_adc;
+
+extern ADC_HandleTypeDef ADC2_Handle;
+
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -217,6 +220,13 @@ void SysTick_Handler(void)
 /* please refer to the startup file (startup_stm32f1xx.s).                    */
 /******************************************************************************/
 
+/**
+  * @brief This function handles ADC 1 & 2 global interrupt.
+  */
+  void ADC1_2_IRQHandler(void)
+  {
+    HAL_ADC_IRQHandler(&ADC2_Handle);
+  }
 
  
 /**

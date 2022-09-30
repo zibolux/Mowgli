@@ -22,13 +22,13 @@
 //#define  SW_I2C_WAIT_TIME  23	//(10.4us)
 //#define  SW_I2C_WAIT_TIME  22	//100Khz(10.0us)	100Khz	==	10us
 //#define  SW_I2C_WAIT_TIME  10	//195Khz
-#define  SW_I2C_WAIT_TIME  9	//205Khz	200Khz	==	5us
+//#define  SW_I2C_WAIT_TIME  9	//205Khz	200Khz	==	5us
 //#define  SW_I2C_WAIT_TIME  8	//237Khz
 //#define  SW_I2C_WAIT_TIME  7	//240Khz	250Khz	==	4us
 //#define  SW_I2C_WAIT_TIME  6	//275Khz
 //#define  SW_I2C_WAIT_TIME  5	//305Khz
 //#define  SW_I2C_WAIT_TIME  4	//350Khz(3.84us)
-//#define  SW_I2C_WAIT_TIME  3	//400Khz(3.44us)
+#define  SW_I2C_WAIT_TIME  3	//400Khz(3.44us)
 //#define  SW_I2C_WAIT_TIME  2	//425Khz(3.04us)	333Khz	==	3us
 //#define  SW_I2C_WAIT_TIME  1	//425Khz(2.64us)	400Khz	==	2.5us
 
@@ -47,7 +47,7 @@
 
 
 
-void TIMER__Wait_us(uint32_t nCount)
+void  __attribute__ ((optimize(0))) TIMER__Wait_us (uint32_t nCount) 
 {
     for (; nCount != 0;nCount--);
 }
@@ -58,7 +58,7 @@ void SW_I2C_Init(void)
     
     /* PB3, PB4 are used by the JTAG - we need to disable it, as we use SWD anyhow we dont need it */
     RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
-    AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_JTAGDISABLE; // JTAG is disabled, SWD is enabled
+    AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_NOJNTRST; // JTAG is disabled, SWD is enabled
 
 
     SOFT_I2C_GPIO_CLK_ENABLE();
@@ -186,7 +186,7 @@ void i2c_clk_data_out(void)
     scl_high();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
     scl_low();
-//    TIMER__Wait_us(SW_I2C_WAIT_TIME>>2);
+    //TIMER__Wait_us(SW_I2C_WAIT_TIME>>2);
 }
 
 void i2c_port_initial(void)
@@ -204,8 +204,6 @@ void i2c_start_condition(void)
     sda_low();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
     scl_low();
-
-    TIMER__Wait_us(SW_I2C_WAIT_TIME << 1);
 }
 
 void i2c_stop_condition(void)
@@ -231,7 +229,7 @@ uint8_t i2c_check_ack(void)
     ack = FALSE;
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    for (i = 10; i > 0; i--)
+    for (i = 50; i > 0; i--)
     {
         temp = !(SW_I2C_ReadVal_SDA());	//0=ack , 1=nack
         if (temp)	// if ack, enter

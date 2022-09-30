@@ -1,17 +1,17 @@
 /****************************************************************************
-* Title                 :   WT901 driver
-* Filename              :   WT901.h
+* Title                 :   Perimeter wire module
+* Filename              :   perimeter.h
 * Author                :   Nekraus
-* Origin Date           :   15/09/2022
+* Origin Date           :   24/09/2022
 * Version               :   1.0.0
 
 *****************************************************************************/
-/** \file WT901.h
+/** \file perimeter.h
 *  \brief 
 *
 */
-#ifndef __WT901_H
-#define __WT901_H
+#ifndef __PERIMETER_H
+#define __PERIMETER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,8 +19,7 @@ extern "C" {
 /******************************************************************************
 * Includes
 *******************************************************************************/
-#include "stm32f1xx_hal.h"
-
+#include <stdbool.h>
 /******************************************************************************
 * Preprocessor Constants
 *******************************************************************************/
@@ -36,59 +35,35 @@ extern "C" {
 /******************************************************************************
 * Typedefs
 *******************************************************************************/
+typedef enum {
+    COIL_LEFT = 0,
+    COIL_MIDDLE = 1,
+    COIL_RIGHT = 2,
+    COIL_MAX= 3,
+}perimeter_CoilNumber_e;
 
 /******************************************************************************
 * Variables
 *******************************************************************************/
+extern ADC_HandleTypeDef ADC_Handle;
 
+extern int32_t mag[COIL_MAX];
+extern float smoothMag[COIL_MAX];
+extern float quality[COIL_MAX];
 /******************************************************************************
 * PUBLIC Function Prototypes
 *******************************************************************************/
-/**
-  * @brief  Test Device 
-  * Perform any tests possible before actually enabling and using the device,
-  * for example check the i2c address and whoami registers if existing  
-  *
-  * @retval          0 -> test failed 1-> test ok, good to init and use
-  *
-  */
-uint8_t IMU_TestDevice(void);
+void Perimeter_vInit(void);
+void Perimeter_vApp(void);
+void PERIMETER_vITHandle(void);
 
-/**
-  * @brief  Initialize IMU
-  *  
-  */
-void IMU_Init(void);
+void Perimeter_vStart(bool on);
 
-/**
-  * @brief  Reads the 3 accelerometer channels and stores them in *x,*y,*z
-  * units are m/s^2
-  */
-void IMU_ReadAccelerometerRaw(float *x, float *y, float *z);
 
-/**
-  * @brief  Reads the 3 gyro channels and stores them in *x,*y,*z
-  * units are rad/sec
-  */
-void IMU_ReadGyroRaw(float *x, float *y, float *z);
-
-/**
-  * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
-  * units are tesla uncalibrated
-  */
-void IMU_ReadMagnetometerRaw(double *x, double *y, double *z);
-
-/**
-  * @brief  Reads the raw temp value
-  * (internal function only)
-  * @retval float temp in °C
-  */
-float IMU_TempRaw(void);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /*WT901_H*/ 
+#endif /*__PERIMETER_H*/ 
 
 /*** End of File **************************************************************/

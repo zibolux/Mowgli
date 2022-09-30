@@ -29,6 +29,7 @@
 #include "blademotor.h"
 #include "drivemotor.h"
 #include "ultrasonic_sensor.h"
+#include "perimeter.h"
 #include "soft_i2c.h"
 #include "spiflash.h"
 #include "i2c.h"
@@ -69,17 +70,6 @@ volatile uint8_t  master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
 static char master_tx_buffer[255];
 
-#define ADC_NUMBER_MEASURE 80
-typedef struct 
-{
-    uint16_t current_raw;
-    uint16_t charge_voltage_raw;
-    uint16_t battery_voltage_raw;
-    uint16_t chargerInput_voltage_raw;
-}__attribute__((__packed__))ADC_Data_t;
-
-
-volatile ADC_Data_t adc_buffer[ADC_NUMBER_MEASURE]={0};
 
 typedef enum{
     CHARGER_STATE_IDLE,
@@ -118,9 +108,20 @@ SPI_HandleTypeDef SPI3_Handle;
 // Drive Motors DMA
 DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart4_tx;
-DMA_HandleTypeDef hdma_adc;
 
-ADC_HandleTypeDef ADC_Handle;
+/*ADC variables */
+ADC_HandleTypeDef ADC2_Handle;
+
+typedef enum{
+    ADC2_CHANNEL_CURRENT = 0,
+    ADC2_CHANNEL_CHARGEVOLTAGE,
+    ADC2_CHANNEL_BATTERYVOLTAGE,
+    ADC2_CHANNEL_CHARGERINPUTVOLTAGE,
+    ADC2_CHANNEL_MAX,
+} ADC2_channelSelection_e;
+ADC2_channelSelection_e adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
+void adc2_SetChannel(ADC2_channelSelection_e channel);
+
 TIM_HandleTypeDef TIM1_Handle;  // PWM Charge Controller
 TIM_HandleTypeDef TIM2_Handle;  // Time Base for ADC
 TIM_HandleTypeDef TIM3_Handle;  // PWM Beeper
@@ -167,7 +168,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {           
   if (huart->Instance == MASTER_USART_INSTANCE)
   {
-    ULTRASONICSENSOR_ReceiceIT();       
+    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
+    ULTRASONICSENSOR_ReceiceIT(); 
+    #endif      
   }
   else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
   {
@@ -203,7 +206,8 @@ int main(void)
     LED_Init();
     DB_TRACE(" * LED initialized\r\n");
     TIM2_Init();
-    ADC1_Init();    
+    ADC2_Init();    
+    Perimeter_vInit();
     DB_TRACE(" * ADC1 initialized\r\n");  
     TIM3_Init();
     HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);    
@@ -238,12 +242,12 @@ int main(void)
         DB_TRACE(" * WARNING: initalization of onboard accelerometer for tilt protection failed !\r\n");
     }    
     DB_TRACE(" * Accelerometer (onboard/tilt safety) initialized\r\n");    
-    //SW_I2C_Init();
+    SW_I2C_Init();
     DB_TRACE(" * Soft I2C (J18) initialized\r\n");
     DB_TRACE(" * Testing supported IMUs:\r\n");
-    //IMU_TestDevice();
-    //IMU_Init();
-    //IMU_Calibrate();
+    IMU_TestDevice();
+    IMU_Init();
+    IMU_Calibrate();
     Emergency_Init();
     DB_TRACE(" * Emergency sensors initialized\r\n");  
     TIM1_Init();   
@@ -266,6 +270,9 @@ int main(void)
     #ifdef BLADEMOTOR_USART_ENABLED
         BLADEMOTOR_Init();
     #endif
+    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
+      ULTRASONICSENSOR_Init();
+    #endif
     
 
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
@@ -278,7 +285,9 @@ int main(void)
     NBT_init(&main_chargecontroller_nbt, 10);
     NBT_init(&main_statusled_nbt, 1000);
     NBT_init(&main_emergency_nbt, 10);
+    #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
     NBT_init(&main_ultrasonicsensor_nbt, 50);
+    #endif
     NBT_init(&main_blademotor_nbt, 100);
     NBT_init(&main_drivemotor_nbt, 10);
     NBT_init(&main_wdg_nbt,10);
@@ -307,37 +316,41 @@ int main(void)
       broadcast_handler(); 
 
       DRIVEMOTOR_App_Rx();
+      Perimeter_vApp();
 
       if (NBT_handler(&main_chargecontroller_nbt))
 	    {            
 			  ChargeController();
 	    }
-        if (NBT_handler(&main_statusled_nbt))
+      if (NBT_handler(&main_statusled_nbt))
 	    {            
 			  StatusLEDUpdate();          
                        
             // DB_TRACE("master_rx_STATUS: %d  drivemotors_rx_buf_idx: %d  cnt_usart2_overrun: %x\r\n", master_rx_STATUS, drivemotors_rx_buf_idx, cnt_usart2_overrun);           
 	    }
-        if (NBT_handler(&main_ultrasonicsensor_nbt))
+    #if(DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
+      if (NBT_handler(&main_ultrasonicsensor_nbt))
 	    {            
 			  ULTRASONICSENSOR_App();                   
 	    }
-
+    #endif
       if (NBT_handler(&main_wdg_nbt))
 	    {            
 			  WATCHDOG_Refresh();                   
 	    }
 
-        if (NBT_handler(&main_drivemotor_nbt))
+      if (NBT_handler(&main_drivemotor_nbt))
 	    {            
         DRIVEMOTOR_App_10ms();      
 	    }
       
-        if (NBT_handler(&main_blademotor_nbt))
+      if (NBT_handler(&main_blademotor_nbt))
 	    {            
 			  BLADEMOTOR_App();       
         DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);
-        DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc.f, SOC);     
+        //DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc.f, SOC); 
+        DB_TRACE(" SmoothMag  L:%.1f M:%.1f R:%.1f \r\n", smoothMag[COIL_LEFT], smoothMag[COIL_MIDDLE],smoothMag[COIL_RIGHT]);
+            
 
 	    }
         
@@ -518,7 +531,8 @@ void SPI3_Init()
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     
     // Disable JTAG only to free PA15, PB3* and PB4. SWD remains active
-    MODIFY_REG(AFIO->MAPR, AFIO_MAPR_SWJ_CFG, AFIO_MAPR_SWJ_CFG_JTAGDISABLE);
+    RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
+    __HAL_AFIO_REMAP_SWJ_NOJTAG();
 
     __HAL_RCC_SPI3_CLK_ENABLE();
     FLASH_SPI_CLK_ENABLE();
@@ -569,6 +583,9 @@ void SPI3_DeInit()
     
     HAL_GPIO_DeInit(FLASH_SPI_PORT,FLASH_CLK_PIN | FLASH_MISO_PIN | FLASH_nCS_PIN);
     HAL_GPIO_DeInit(FLASH_SPICS_PORT,FLASH_nCS_PIN);
+
+   // reactivate JTAG
+   __HAL_AFIO_REMAP_SWJ_ENABLE();
 }
 
 
@@ -632,8 +649,8 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_USB | RCC_PERIPHCLK_RTC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC | RCC_PERIPHCLK_USB | RCC_PERIPHCLK_RTC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV8;
   PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -646,11 +663,10 @@ void SystemClock_Config(void)
 /*
  * VREF+ = 3.3v
  */
-void ADC1_Init(void)
+void ADC2_Init(void)
 {
-    ADC_ChannelConfTypeDef sConfig = {0};
-    
-    __HAL_RCC_ADC1_CLK_ENABLE();
+
+    __HAL_RCC_ADC2_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -673,72 +689,29 @@ void ADC1_Init(void)
 
     /** Common config
      */
-    ADC_Handle.Instance = ADC1;
-    ADC_Handle.Init.ScanConvMode = ADC_SCAN_ENABLE;
-    ADC_Handle.Init.ContinuousConvMode = DISABLE;
-    ADC_Handle.Init.DiscontinuousConvMode = DISABLE;
-    ADC_Handle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T2_CC2;
-    ADC_Handle.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-    ADC_Handle.Init.NbrOfConversion = 4;
-    if (HAL_ADC_Init(&ADC_Handle) != HAL_OK)
+    ADC2_Handle.Instance = ADC2;
+    ADC2_Handle.Init.ScanConvMode = ADC_SCAN_DISABLE;
+    ADC2_Handle.Init.ContinuousConvMode = DISABLE;
+    ADC2_Handle.Init.DiscontinuousConvMode = DISABLE;
+    ADC2_Handle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T2_CC2;
+    ADC2_Handle.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    ADC2_Handle.Init.NbrOfConversion = 1;
+    if (HAL_ADC_Init(&ADC2_Handle) != HAL_OK)
     {
         Error_Handler();
     }
 
-    sConfig.Channel = ADC_CHANNEL_1; // PA1 Charge Current
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
+  adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
+  adc2_SetChannel(adc2_eChannelSelection);
 
-    sConfig.Channel = ADC_CHANNEL_2; // PA2 Charge Voltage
-    sConfig.Rank = ADC_REGULAR_RANK_2;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
+ 
 
-    sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
-    sConfig.Rank = ADC_REGULAR_RANK_3;
-    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-
-    
-    sConfig.Channel = ADC_CHANNEL_7; // PA7 Charger Input voltage
-    sConfig.Rank = ADC_REGULAR_RANK_4;
-    sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
-    if (HAL_ADC_ConfigChannel(&ADC_Handle, &sConfig) != HAL_OK)
-    {
-       Error_Handler();
-    }
-
-    /* ADC DMA Init */
-    /* ADC Init */
-    hdma_adc.Instance = DMA1_Channel1;
-    hdma_adc.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_adc.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_adc.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_adc.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-    hdma_adc.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-    hdma_adc.Init.Mode = DMA_CIRCULAR;
-    hdma_adc.Init.Priority = DMA_PRIORITY_HIGH;
-    if (HAL_DMA_Init(&hdma_adc) != HAL_OK)
-    {
-      Error_Handler();
-    }
-
-   __HAL_LINKDMA(&ADC_Handle,DMA_Handle,hdma_adc);
+  HAL_NVIC_SetPriority(ADC1_2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(ADC1_2_IRQn);
 
   // calibrate  - important for accuracy !
-  HAL_ADCEx_Calibration_Start(&ADC_Handle); 
-  memset(&adc_buffer[0],0,ADC_NUMBER_MEASURE*sizeof(ADC_Data_t));
-  HAL_ADC_Start_DMA(&ADC_Handle,(uint32_t*)&adc_buffer[0],320);
+  HAL_ADCEx_Calibration_Start(&ADC2_Handle); 
+  HAL_ADC_Start_IT(&ADC2_Handle);
   HAL_TIM_OC_Start(&TIM2_Handle,TIM_CHANNEL_2);
 
     /* USER CODE BEGIN RTC_MspInit 0 */
@@ -751,15 +724,6 @@ void ADC1_Init(void)
   /* USER CODE BEGIN RTC_MspInit 1 */
   HAL_PWR_EnableBkUpAccess();
 
-  /* not sure if needed  TODO remove*/
-  hrtc.Instance = RTC;
-  hrtc.Init.AsynchPrediv = RTC_AUTO_1_SECOND;
-  hrtc.Init.OutPut = RTC_OUTPUTSOURCE_ALARM;
-  if (HAL_RTC_Init(&hrtc) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
   ampere_acc.u[0] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1);
   ampere_acc.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR2);
 
@@ -767,51 +731,64 @@ void ADC1_Init(void)
   charge_current_offset.u[1] = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR4);
 }
 
- 
-/**
-* @brief RTC MSP Initialization
-* This function configures the hardware resources used in this example
-* @param hrtc: RTC handle pointer
-* @retval None
-*/
-void HAL_RTC_MspInit(RTC_HandleTypeDef* hrtc)
-{
-  if(hrtc->Instance==RTC)
+void adc2_SetChannel(ADC2_channelSelection_e channel){
+  
+  ADC_ChannelConfTypeDef sConfig = {0};
+    
+  switch (channel)
   {
-  /* USER CODE BEGIN RTC_MspInit 0 */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  /* USER CODE END RTC_MspInit 0 */
-  /* Enable BKP CLK enable for backup registers */
-  __HAL_RCC_BKP_CLK_ENABLE();
-  /* Peripheral clock enable */
-  __HAL_RCC_RTC_ENABLE();
-  /* USER CODE BEGIN RTC_MspInit 1 */
-  HAL_PWR_EnableBkUpAccess();
-  /* USER CODE END RTC_MspInit 1 */
+  case ADC2_CHANNEL_CURRENT:
+    sConfig.Channel = ADC_CHANNEL_1; // PA1 Charge Current
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+    break;
+
+  case ADC2_CHANNEL_CHARGEVOLTAGE:
+    sConfig.Channel = ADC_CHANNEL_2; // PA2 Charge Voltage
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+    break;
+  
+  case ADC2_CHANNEL_BATTERYVOLTAGE:
+    sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+    break;
+
+  case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
+    sConfig.Channel = ADC_CHANNEL_7; // PA7 Charger Input voltage
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+    break;
+
+  case ADC2_CHANNEL_MAX:
+  default:
+    /* should not get here */
+    sConfig.Channel = ADC_CHANNEL_3; // PA3 Battery
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+    break;
   }
-
-}
-
-/**
-* @brief RTC MSP De-Initialization
-* This function freeze the hardware resources used in this example
-* @param hrtc: RTC handle pointer
-* @retval None
-*/
-void HAL_RTC_MspDeInit(RTC_HandleTypeDef* hrtc)
-{
-  if(hrtc->Instance==RTC)
-  {
-  /* USER CODE BEGIN RTC_MspDeInit 0 */
-
-  /* USER CODE END RTC_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_RTC_DISABLE();
-  /* USER CODE BEGIN RTC_MspDeInit 1 */
-
-  /* USER CODE END RTC_MspDeInit 1 */
-  }
-
 }
 
 /**
@@ -932,7 +909,7 @@ void TIM2_Init(void)
   TIM2_Handle.Instance = TIM2;
   TIM2_Handle.Init.Prescaler = 18-1; // 72Mhz -> 4Mhz
   TIM2_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-  TIM2_Handle.Init.Period = 250-1; /*4khz*/
+  TIM2_Handle.Init.Period = 1000-1; /*1khz*/
   TIM2_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   TIM2_Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_OC_Init(&TIM2_Handle) != HAL_OK)
@@ -953,7 +930,7 @@ void TIM2_Init(void)
   }
 
   sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
-  sConfigOC.Pulse = 125;
+  sConfigOC.Pulse = 5;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&TIM2_Handle, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
@@ -1369,20 +1346,15 @@ void vprint(const char *fmt, va_list argp)
 {
     char string[200];    
     if(0 < vsprintf(string,fmt,argp)) // build string
-    {
+    {   
+        #if DEBUG_TYPE == DEBUG_TYPE_SWO
          for (int i = 0; i < strlen(string); i++)
          {
-             ITM_SendChar(string[i]);
+            ITM_SendChar(string[i]);
          }
-       // MASTER_Transmit((unsigned char*)string, strlen(string));
-
-        // HAL_UART_Transmit(&MASTER_USART_Handler, (uint8_t*)string, strlen(string), HAL_MAX_DELAY); // send message via UART               
-        //while (master_tx_busy) {  }
-        //master_tx_busy = 1;        
-        //master_tx_buffer_len = strlen(string);
-        //memcpy(master_tx_buffer, string, master_tx_buffer_len);
-        //HAL_UART_Transmit_DMA(&MASTER_USART_Handler, (uint8_t*)master_tx_buffer, master_tx_buffer_len); // send message via UART                
-        // HAL_Delay(10);
+        #elif DEBUG_TYPE == DEBUG_TYPE_UART
+            MASTER_Transmit((unsigned char*)string, strlen(string));
+        #endif
     }
 }
 
@@ -1391,10 +1363,10 @@ void vprint(const char *fmt, va_list argp)
  */
 void debug_printf(const char *fmt, ...) 
 {
-    va_list argp;
-    va_start(argp, fmt);
-    vprint(fmt, argp);
-    va_end(argp);
+  va_list argp;
+  va_start(argp, fmt);
+  vprint(fmt, argp);
+  va_end(argp);
 }
 
 /*
@@ -1475,54 +1447,52 @@ static void WATCHDOG_Refresh(void){
   }
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
-  volatile int i = 0;
-  volatile uint32_t l_u32Current_sum = 0;
-  volatile uint32_t l_u32BatVoltage_sum = 0;
-  volatile uint32_t l_u32ChargerVoltage_sum = 0;
-  volatile uint32_t l_u32ChargerInputVoltage_sum = 0;
-  
-  
-  for(i= 40;i<80;++i){
-        l_u32Current_sum += adc_buffer[i].current_raw;
-        l_u32ChargerVoltage_sum += adc_buffer[i].charge_voltage_raw;
-        l_u32BatVoltage_sum += adc_buffer[i].battery_voltage_raw;
-        l_u32ChargerInputVoltage_sum += adc_buffer[i].chargerInput_voltage_raw;
-    }
-   
-  current = (float)l_u32Current_sum/(40);
-  chargerVoltage = (float)l_u32ChargerVoltage_sum/(40);
-  batteryVoltage = (float)l_u32BatVoltage_sum/(40);
-  chargerInputVoltage = (float)l_u32ChargerInputVoltage_sum/(40);
 
-  current = ((float)(current/4095.0f)*3.3f - 2.5f) * 100/12.0;
-  chargerVoltage = (float)(chargerVoltage/4095.0f)*3.3f*16;
-  batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10.09 + 0.6f;
-  chargerInputVoltage = (chargerInputVoltage/4095.0f)*3.3f * (32/2);
+void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
 
+  if(hadc == &ADC_Handle){
+    PERIMETER_vITHandle();
+  }
 
-}
-void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc){
-    volatile int i = 0;
-    volatile uint32_t l_u32Current_sum = 0;
-    volatile uint32_t l_u32BatVoltage_sum = 0;
-    volatile uint32_t l_u32ChargerVoltage_sum = 0;
-    volatile uint32_t l_u32ChargerInputVoltage_sum = 0;
+  if(hadc == &ADC2_Handle){
+    uint16_t l_u16Rawdata = ADC2_Handle.Instance->DR;
+    float tmp;
 
-    for(i= 0;i<40;++i){
-        l_u32Current_sum += adc_buffer[i].current_raw;
-        l_u32ChargerVoltage_sum += adc_buffer[i].charge_voltage_raw;
-        l_u32BatVoltage_sum += adc_buffer[i].battery_voltage_raw;
-        l_u32ChargerInputVoltage_sum += adc_buffer[i].chargerInput_voltage_raw;
-    }
+    switch (adc2_eChannelSelection)
+    {
+    case ADC2_CHANNEL_CURRENT:
+      tmp = (((float)l_u16Rawdata/4095.0f)*3.3f - 2.5f) * 100/12.0;
+      current = 0.8*tmp+0.2*current;
+      break;
+
+    case ADC2_CHANNEL_CHARGEVOLTAGE:
+      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*16;
+      chargerVoltage = 0.8*tmp+0.2*chargerVoltage;
+      break;
     
-    current = (float)l_u32Current_sum/(40);
-    chargerVoltage = (float)l_u32ChargerVoltage_sum/(40);
-    batteryVoltage = (float)l_u32BatVoltage_sum/(40);
-    chargerInputVoltage = (float)l_u32ChargerInputVoltage_sum/(40);
+    case ADC2_CHANNEL_BATTERYVOLTAGE:
+      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*10.09 + 0.6f;
+      batteryVoltage = 0.5*tmp+0.5*batteryVoltage;
+      break;
 
-    current = ((float)(current/4095.0f)*3.3f - 2.5f) * 100/12.0;
-    chargerVoltage = (float)(chargerVoltage/4095.0f)*3.3f*16;
-    batteryVoltage = (float)(batteryVoltage/4095.0f)*3.3f*10.09 + 0.6f;
-    chargerInputVoltage = (chargerInputVoltage/4095.0f)*3.3f * (32/2);
+    case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
+      tmp = (l_u16Rawdata/4095.0f)*3.3f * (32/2);
+      chargerInputVoltage = 0.5*tmp+0.5*chargerInputVoltage;
+      break;
+
+    case ADC2_CHANNEL_MAX:
+    default:
+      /* should not get here */
+      tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*10.09 + 0.6f;
+      batteryVoltage = 0.1*tmp+0.9*batteryVoltage;
+      break;
+  }
+
+  adc2_eChannelSelection++;
+  if(adc2_eChannelSelection == ADC2_CHANNEL_MAX)adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
+  adc2_SetChannel(adc2_eChannelSelection);
+
+  HAL_ADC_Start_IT(&ADC2_Handle);
+  }
+
 }
