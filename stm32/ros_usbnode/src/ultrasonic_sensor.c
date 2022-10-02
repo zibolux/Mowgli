@@ -61,7 +61,7 @@ void ULTRASONICSENSOR_App(void){
     }
 }
 
-void ULTRASONICSENSOR_ReceiceIT(void)
+void ULTRASONICSENSOR_ReceiveIT(void)
 {
     /* decode the frame */
     if(memcmp(ultrasonic_PreAmbule,ultrasonic_pu8ReceivedData,5) == 0){

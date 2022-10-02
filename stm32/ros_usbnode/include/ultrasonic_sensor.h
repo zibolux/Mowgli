@@ -9,7 +9,7 @@ extern "C" {
 
 void ULTRASONICSENSOR_Init(void);
 void ULTRASONICSENSOR_App(void);
-void ULTRASONICSENSOR_ReceiceIT(void);
+void ULTRASONICSENSOR_ReceiveIT(void);
 
 #ifdef __cplusplus
 }

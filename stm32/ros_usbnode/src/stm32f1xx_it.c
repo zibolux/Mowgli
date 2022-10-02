@@ -321,15 +321,6 @@ void DMA1_Channel5_IRQHandler(void)
   HAL_DMA_IRQHandler(&hdma_uart1_rx);
 }
 
-/**
-  * @brief This function handles DMA1 channel3 global interrupt. (BLADE MOTOR UART)
-  */
-void DMA1_Channel3_IRQHandler(void)
-{
-  HAL_DMA_IRQHandler(&hdma_uart3_rx);
-}
-
-
 
 /**
   * @brief This function handles DMA1 channel6 global interrupt. (DRIVE MOTOR UART)

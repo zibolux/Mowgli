@@ -60,11 +60,6 @@ extern "C" {
     #define LOW_BAT_THRESHOLD                   25.2f /* near 20% SOC */
     #define LOW_CRI_THRESHOLD                   24.5f /* near 5% SOC */
 
-    // when the battery voltage reaches this we stop charging
-    #define BAT_CHARGE_CUTOFF_VOLTAGE           28.80
-    // maximum voltage that we will ever supply to the battery
-    #define MAX_CHARGE_VOLTAGE                  29.4
-
     // Emergency sensor timeouts
     #define WHEEL_LIFT_EMERGENCY_MILLIS         500
     #define TILT_EMERGENCY_MILLIS               500      // used for both the mechanical and accelerometer based detection

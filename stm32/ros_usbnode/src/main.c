@@ -177,16 +177,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   if (huart->Instance == MASTER_USART_INSTANCE)
   {
     #if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC==1)
-    ULTRASONICSENSOR_ReceiceIT(); 
+    ULTRASONICSENSOR_ReceiveIT(); 
     #endif      
   }
   else if(huart->Instance == BLADEMOTOR_USART_INSTANCE)
   {
-    BLADEMOTOR_ReceiceIT();
+    BLADEMOTOR_ReceiveIT();
   }
   else if (huart->Instance == DRIVEMOTORS_USART_INSTANCE)
   {
-    DRIVEMOTOR_ReceiceIT();
+    DRIVEMOTOR_ReceiveIT();
   }       
 }
 

@@ -62,12 +62,6 @@ static uint8_t panel_pu8RqstMessage[50]  = {0};
 
 const uint8_t panel_pcu8PreAmbule[5]  = {0x55,0xAA,0x0A,0x50,0x3C};
 
-static uint8_t Led_States[LED_STATE_SIZE];
-
-// static uint8_t Key_Pressed;
-static uint8_t Frame_Received_Panel = 0;
-
-
 void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command);
 
 /*
