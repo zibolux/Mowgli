@@ -102,9 +102,7 @@ void BLADEMOTOR_Init(void)
     GPIO_InitStruct.Pin = BLADEMOTOR_USART_TX_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    HAL_GPIO_Init(BLADEMOTOR_USART_TX_PORT, &GPIO_InitStruct);
-
-    DB_TRACE(" * Blade Motor  GPIO initialized\r\n");
+    HAL_GPIO_Init(BLADEMOTOR_USART_TX_PORT, &GPIO_InitStruct);    
 
     BLADEMOTOR_USART_Handler.Instance = BLADEMOTOR_USART_INSTANCE;// USART3
     BLADEMOTOR_USART_Handler.Init.BaudRate = 115200;               // Baud rate
@@ -151,50 +149,43 @@ void BLADEMOTOR_Init(void)
     }
 
     __HAL_LINKDMA(&BLADEMOTOR_USART_Handler,hdmatx,hdma_uart3_tx);
-    DB_TRACE(" * DMA initialized\r\n");
-
-        // enable IRQ
+    
+    // enable IRQ
     HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
 	HAL_NVIC_EnableIRQ(USART3_IRQn);     
     __HAL_UART_ENABLE_IT(&BLADEMOTOR_USART_Handler, UART_IT_TC);
 
-    blademotor_eState = BLADEMOTOR_INIT_1;
-
-
-    DB_TRACE(" * Blade Motor UART & GPIO initialized\r\n");
+    blademotor_eState = BLADEMOTOR_INIT_1;    
 }
 
+/// @brief handle drive motor messages
+/// @param  
 void  BLADEMOTOR_App(void){
-
     switch (blademotor_eState)
     {
     case BLADEMOTOR_INIT_1:
 
         HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pcu8InitMsg, BLADEMOTOR_LENGTH_INIT_MSG);
         blademotor_eState = BLADEMOTOR_RUN;
-
-        DB_TRACE(" * Blade Motor initialized\r\n");
-     
+        debug_printf(" * Blade Motor Controller initialized\r\n");     
         break;
     
     case BLADEMOTOR_RUN:
-        
-        /* prepare to receive the message before to launch the command */
-        HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler,blademotor_pu8ReceivedData,BLADEMOTOR_LENGTH_RECEIVED_MSG);
-        HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);
+
+        /* prepare to receive the message before to launch the command */        
+        HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler, blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG);
+        HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);    
         break;
     
     default:
         break;
     }
 }
-/*
- * Activate or not the Blade motor
- *
- * <on_off> - no speed settings available
- */
+
+/// @brief control blade motor (there is no speed control for this motor)
+/// @param on_off 1 to turn on, 0 to turn off
 void BLADEMOTOR_Set(uint8_t on_off)
-{
+{    
     if (on_off)
     {
         blademotor_pu8RqstMessage[5] = 0x80; /* change speed Motor */
@@ -207,12 +198,14 @@ void BLADEMOTOR_Set(uint8_t on_off)
     }
 }
 
-
-void BLADEMOTOR_ReceiceIT(void)
+/// @brief drive motor receive interrupt handler
+/// @param  
+void BLADEMOTOR_ReceiveIT(void)
 {
-    /* decode the frame */
-    if(memcmp(blademotor_pcu8PreAmbule,blademotor_pu8ReceivedData,5) == 0){
-        uint8_t l_u8crc = crcCalc(blademotor_pu8ReceivedData,BLADEMOTOR_LENGTH_RECEIVED_MSG-1);
+    /* decode the frame */    
+    if(memcmp(blademotor_pcu8Preamble, blademotor_pu8ReceivedData, 5) == 0){        
+        uint8_t l_u8crc = crcCalc(blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG-1);
+
         if(blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG-1] == l_u8crc ){
             if((blademotor_pu8ReceivedData[5] & 0x80) == 0x80){
                 BLADEMOTOR_bActivated = true;
@@ -221,8 +214,7 @@ void BLADEMOTOR_ReceiceIT(void)
                 BLADEMOTOR_bActivated = false;
             }
             BLADEMOTOR_u16Counter1 = blademotor_pu8ReceivedData[7] + (blademotor_pu8ReceivedData[8]<<8);
-            BLADEMOTOR_u16Counter2 = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;
-            //DB_TRACE (" act : %d, B5 : %x, u16_0 :%d, u16_A: %d \n",BLADEMOTOR_bActivated, blademotor_pu8ReceivedData[5],BLADEMOTOR_u16Counter1,BLADEMOTOR_u16Counter2 );
+            BLADEMOTOR_u16Counter2 = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;           
         }
   
     }

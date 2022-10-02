@@ -79,9 +79,8 @@ void IMU_ReadMagnetometerNormalized(double *x, double *y, double *z)
 }
 
 /**
-  * @brief Calculate heading from Magnetometer 
-  * 
-  * units are ms^2 uncalibrated
+  * @brief Calculate heading from (calibrated) Magnetometer data
+  *   
   */
 float IMU_MagHeading(void)
 {
@@ -295,13 +294,13 @@ void IMU_Calibrate()
     debug_printf("   >> Onboard IMU Calibration magentometer biases (hard iron) [%f %f %f]\r\n", onboard_imu_mag_bias[0],  onboard_imu_mag_bias[1],  onboard_imu_mag_bias[2]); 
 
     // ROW 0
-    onboard_imu_mag_cal_matrix[0][0] = SPIFLASH_ReadDouble("mag_dist_00");
-    onboard_imu_mag_cal_matrix[0][1] = SPIFLASH_ReadDouble("mag_dist_01");
-    onboard_imu_mag_cal_matrix[0][2] = SPIFLASH_ReadDouble("mag_dist_02");
+    external_imu_mag_cal_matrix[0][0] = SPIFLASH_ReadDouble("mag_dist_00");
+    external_imu_mag_cal_matrix[0][1] = SPIFLASH_ReadDouble("mag_dist_01");
+    external_imu_mag_cal_matrix[0][2] = SPIFLASH_ReadDouble("mag_dist_02");
     // ROW 1
-    onboard_imu_mag_cal_matrix[1][0] = SPIFLASH_ReadDouble("mag_dist_10");
-    onboard_imu_mag_cal_matrix[1][1] = SPIFLASH_ReadDouble("mag_dist_11");
-    onboard_imu_mag_cal_matrix[1][2] = SPIFLASH_ReadDouble("mag_dist_12");
+    external_imu_mag_cal_matrix[1][0] = SPIFLASH_ReadDouble("mag_dist_10");
+    external_imu_mag_cal_matrix[1][1] = SPIFLASH_ReadDouble("mag_dist_11");
+    external_imu_mag_cal_matrix[1][2] = SPIFLASH_ReadDouble("mag_dist_12");
     // ROW 2
     onboard_imu_mag_cal_matrix[2][0] = SPIFLASH_ReadDouble("mag_dist_20");
     onboard_imu_mag_cal_matrix[2][1] = SPIFLASH_ReadDouble("mag_dist_21");

@@ -2,9 +2,14 @@
   ******************************************************************************
   * @file    cpp_main.c
   * @author  Georg Swoboda <cn@warp.at>
+  * @date    21/09/2022
+  * @version 1.0.0
   * @brief   ROS Node main C++ routines
   ******************************************************************************
-  * 
+  * Main ROS routines
+  * Publish/Subscribe to Topics
+  * Provide Services
+  * Odometry (for DR)
   ******************************************************************************
   */
 
@@ -15,8 +20,8 @@
 #include "main.h"
 #include "panel.h"
 #include "emergency.h"
-#include "blademotor.h"
 #include "drivemotor.h"
+#include "blademotor.h"
 #include "spiflash.h"
 #include "stm32f1xx_hal.h"
 #include "ringbuffer.h"
@@ -49,6 +54,7 @@
 // Flash Configuration Services
 #include "mowgli/SetCfg.h"
 #include "mowgli/GetCfg.h"
+#include "mowgli/Led.h"
 
 // Status message
 #include "mowgli/status.h"
@@ -64,9 +70,9 @@
 #define WHEEL_DIAMETER 0.198 	// The diameter of the wheels in meters
 
 #define ODOM_NBT_TIME_MS   100 	// 200ms
-#define IMU_NBT_TIME_MS    20  
-#define MOTORS_NBT_TIME_MS 50
-#define STATUS_NBT_TIME_MS 100
+#define IMU_NBT_TIME_MS    100  
+#define MOTORS_NBT_TIME_MS 100
+#define STATUS_NBT_TIME_MS 250
 
 extern uint8_t RxBuffer[RxBufferSize];
 struct ringbuffer rb;
@@ -93,8 +99,8 @@ ros::NodeHandle nh;
 geometry_msgs::Quaternion quat;
 geometry_msgs::TransformStamped t;
 tf::TransformBroadcaster broadcaster;
-char base_link[] = "base_link";
-char odom[] = "odom";
+char base_link[] = "base_link_dr";
+char odom[] = "odom_dr";
 
 //double radius = 0.04;                              //Wheel radius, in m
 //double wheelbase = 0.187;                          //Wheelbase, in m
@@ -118,7 +124,7 @@ double linear_scale_positive = 1.0;
 double linear_scale_negative = 1.0;
 double angular_scale_positive = 1.0;
 double angular_scale_negative = 1.0;
-// bool publish_tf = false; // publish odom -> base_link transform
+bool publish_tf = true; // publish odom -> base_link transform
 double dt = 0.0;
 double dx = 0.0;
 double dy = 0.0;
@@ -171,7 +177,7 @@ mowgli::status status_msg;
 // ros::Publisher pubChargePWM("charge_pwm", &int16_charge_pwm_msg);
 // ros::Publisher pubChargeingState("charging_state", &bool_charging_state_msg);
 // ros::Publisher pubBladeState("blade_state", &bool_blade_state_msg);
-ros::Publisher pubOdom("odom", &odom_msg);
+ros::Publisher pubOdom("mowgli/odom", &odom_msg);
 // ros::Publisher pubLeftEncoderTicks("left_encoder_ticks", &left_encoder_ticks_msg);
 // ros::Publisher pubRightEncoderTicks("right_encoder_ticks", &right_encoder_ticks_msg);
 ros::Publisher pubButtonState("buttonstate", &buttonstate_msg);
@@ -203,12 +209,17 @@ void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res);
 void cbGetCfg(const mowgli::GetCfgRequest &req, mowgli::GetCfgResponse &res);
 void cbEnableMowerMotor(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
 void cbReboot(const std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+void cbEnableTF(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res);
+void cbSetLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
+void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res);
 
 ros::ServiceServer<mowgli::SetCfgRequest, mowgli::SetCfgResponse> svcSetCfg("mowgli/SetCfg", cbSetCfg);
 ros::ServiceServer<mowgli::GetCfgRequest, mowgli::GetCfgResponse> svcGetCfg("mowgli/GetCfg", cbGetCfg);
 ros::ServiceServer<std_srvs::SetBool::Request, std_srvs::SetBool::Response> svcEnableMowerMotor("mowgli/EnableMowerMotor", cbEnableMowerMotor);
 ros::ServiceServer<std_srvs::Empty::Request, std_srvs::Empty::Response> svcReboot("mowgli/Reboot", cbReboot);
-
+ros::ServiceServer<std_srvs::SetBool::Request, std_srvs::SetBool::Response> svcEnableTF("mowgli/EnableTF", cbEnableTF);
+ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcSetLed("mowgli/SetLed", cbSetLed);
+ros::ServiceServer<mowgli::LedRequest, mowgli::LedResponse> svcClrLed("mowgli/ClrLed", cbClrLed);
 
 /*
  * NON BLOCKING TIMERS
@@ -342,7 +353,7 @@ extern "C" void motors_handler()
 	  if (NBT_handler(&motors_nbt))
 	  {
 		if (Emergency_State())
-		{
+		{			
 			DRIVEMOTOR_SetSpeed(0,0,0,0);
 			BLADEMOTOR_Set(0);
 		}
@@ -359,11 +370,9 @@ extern "C" void motors_handler()
 			// if the last blade cmd is older than 25sec we stop the motor
 			last_cmd_blade_age = nh.now().sec - last_cmd_blade.sec;
 			if (last_cmd_blade_age > 25) {
-				BLADEMOTOR_Set(0);
-			}
-			else {
-				BLADEMOTOR_Set(blade_on_off);
-			}
+				blade_on_off = 0;				
+			}			
+			BLADEMOTOR_Set(blade_on_off);			
 		}
 	  }
 }
@@ -378,7 +387,7 @@ extern "C" void panel_handler()
 		PANEL_Tick();
 		if (buttonupdated == 1)
 		{
-			debug_printf("buttonstate changed\r\n");
+			debug_printf("ROS: panel_nbt() - buttonstate changed\r\n");
 			buttonstate_msg.data = (int16_t*) malloc(sizeof(int16_t) * PANEL_BUTTON_BYTES);
 			buttonstate_msg.data_length = PANEL_BUTTON_BYTES;
 			memcpy(buttonstate_msg.data,buttonstate,sizeof(int16_t) * PANEL_BUTTON_BYTES);
@@ -498,6 +507,12 @@ extern "C" void broadcast_handler()
 		status_msg.imu_temp = imu_onboard_temperature;
 		status_msg.blade_motor_ctrl_enabled = true;	// hardcoded for now
 		status_msg.drive_motor_ctrl_enabled = true; // hardcoded for now
+		status_msg.blade_motor_enabled = BLADEMOTOR_bActivated;	// set by feedback from blademotor	
+		status_msg.left_power = left_power;	
+		status_msg.right_power = right_power; 
+		status_msg.sw_ver_maj = MOWGLI_SW_VERSION_MAJOR;
+		status_msg.sw_ver_bra = MOWGLI_SW_VERSION_BRANCH;
+		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;
 		pubStatus.publish(&status_msg);		
 	  } // if (NBT_handler(&status_nbt))
 
@@ -533,8 +548,9 @@ extern "C" void broadcast_handler()
 				distance_right = -1.0 * (right_encoder_ticks_old-right_encoder_ticks)/TICKS_PER_M;
 
 			// only continue with calculating an odom message if we are moving, 
-			// or 0.5 sec are elapsed since the last odom message was published
-			if (distance_left != 0 || distance_right != 0 || dt > 0.5)
+			// or 0.1 sec are elapsed since the last odom message was published
+			//if (distance_left != 0 || distance_right != 0 || dt > 0.05)
+			if (1)
 			{
 				odom_last_time = nh.now();
 
@@ -571,10 +587,26 @@ extern "C" void broadcast_handler()
 				right_encoder_ticks_old = right_encoder_ticks;
 
 				quat = tf::createQuaternionFromYaw(theta);
+				current_time = nh.now(); 
+
+				//////////////////////////////////////////////////
+				// odom transform (optional)
+				//////////////////////////////////////////////////
+				if(publish_tf) {
+					geometry_msgs::TransformStamped t;						
+					t.header.frame_id = odom;
+					t.child_frame_id = base_link;
+					t.transform.translation.x = x_pos;
+					t.transform.translation.y = y_pos;
+					t.transform.translation.z = 0.0;
+					t.transform.rotation = quat;
+					t.header.stamp = current_time;					
+					broadcaster.sendTransform(t);			
+				}
 				//////////////////////////////////////////////////
 				// odom message
 				//////////////////////////////////////////////////
-				odom_msg.header.stamp = nh.now(); 	
+				odom_msg.header.stamp = current_time; 	
 				odom_msg.header.frame_id = odom;
 				odom_msg.pose.pose.position.x = x_pos;
 				odom_msg.pose.pose.position.y = y_pos;
@@ -599,8 +631,8 @@ extern "C" void broadcast_handler()
 					odom_msg.twist.covariance[35] = 1e-9;
 				}
 				else{
-					odom_msg.pose.covariance[0] = 1e-3;
-					odom_msg.pose.covariance[7] = 1e-3;
+					odom_msg.pose.covariance[0] = 1e-1;
+					odom_msg.pose.covariance[7] = 1e-1;
 					odom_msg.pose.covariance[8] = 0.0;
 					odom_msg.pose.covariance[14] = 1e6;
 					odom_msg.pose.covariance[21] = 1e6;
@@ -650,6 +682,59 @@ void cbGetCfg(const mowgli::GetCfgRequest &req, mowgli::GetCfgResponse &res)
 		res.status = 0;
 	}
 }
+
+/// @brief Set Led and optionally reset all other Leds (0x40) + Chirp (0x80)
+/// @param req req.led the LED number and any option flags
+/// @param res 
+void cbSetLed(const mowgli::LedRequest &req, mowgli::LedResponse &res)
+{	
+ //  debug_printf("cbSetLed:\r\n");
+ //  debug_printf(" led: %d\r\n", req.led);
+   uint8_t v=req.led;
+   if ( (req.led & 0x40) == 0x40)	// clear all Leds
+   {
+		for (uint8_t i=0;i<LED_STATE_SIZE;i++)
+		{
+			PANEL_Set_LED(i, PANEL_LED_OFF);
+		}
+   }  
+   if ( (req.led & 0x80) == 0x80)
+   {
+     do_chirp = 1;
+   }
+
+   // remove flag bits, turn on led
+   v &= ~(1UL<<7);
+   v &= ~(1UL<<6);
+   PANEL_Set_LED(v, PANEL_LED_ON);
+}
+
+/// @brief Clear Led and optionally reset all other Leds (0x40) + Chirp (0x80)
+/// @param req req.led the LED number and any option flags
+/// @param res 
+void cbClrLed(const mowgli::LedRequest &req, mowgli::LedResponse &res)
+{	
+ //  debug_printf("cbClrLed:\r\n");
+ //  debug_printf(" led: %d\r\n", req.led);
+   uint8_t v=req.led;
+   if ( (req.led & 0x40) == 0x40)	// clear all Leds
+   {
+		for (uint8_t i=0;i<LED_STATE_SIZE;i++)
+		{
+			PANEL_Set_LED(i, PANEL_LED_OFF);
+		}
+   }  
+   if ( (req.led & 0x80) == 0x80)
+   {
+     do_chirp = 1;
+   }
+ 
+   // remove flag bits, turn of led
+   v &= ~(1UL<<7);
+   v &= ~(1UL<<6);
+   PANEL_Set_LED(v, PANEL_LED_OFF);
+}
+
 
 /*
  *  callback for mowgli/SetCfg Service
@@ -727,21 +812,38 @@ void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res) {
 }
 
 /*
- *  callback for mowgli/EnableMowerMotor Service
+ *  callback for mowgli/EnableTF Service
  */
-void cbEnableMowerMotor(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
+void cbEnableTF(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
 {
-	//debug_printf("cbEnableMowerMotor:\r\n");
-	last_cmd_blade = nh.now();	// if the last blade cmd is older than 25sec the motor will be stopped !
-	blade_on_off = req.data;
+	publish_tf = req.data;
     if (req.data) {        		
         res.success = true;
-        res.message = "Mower Blade Motor has been started";
+        res.message = "cbEnableTF: publishing transform activated";
     }
     else {
         res.success = false;
-        res.message = "Mower Blade Motor is being stopped";
+        res.message = "cbEnableTF: publishing transform de-activated";
     }    
+}
+
+/*
+ *  callback for mowgli/EnableMowerMotor Service
+ */
+void cbEnableMowerMotor(const std_srvs::SetBool::Request &req, std_srvs::SetBool::Response &res)
+{	
+	last_cmd_blade = nh.now();	// if the last blade cmd is older than 25sec the motor will be stopped !
+	debug_printf("ROS: cbEnableMowerMotor(from %d to %d)", blade_on_off, req.data);	
+	blade_on_off = req.data;	
+    if (req.data) {        		
+        res.success = true;
+        res.message = "";
+    }
+    else {
+        res.success = true;
+        res.message = "";
+    }    
+	debug_printf("[DONE]\r\n");
 }
 
 /*
@@ -804,6 +906,9 @@ extern "C" void init_ROS()
 	nh.advertiseService(svcGetCfg);	  
     nh.advertiseService(svcEnableMowerMotor);
 	nh.advertiseService(svcReboot);
+	nh.advertiseService(svcEnableTF);
+    nh.advertiseService(svcSetLed);
+	nh.advertiseService(svcClrLed);
 	
 	// Initialize Timers
 	NBT_init(&publish_nbt, 1000);

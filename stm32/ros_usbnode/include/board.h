@@ -1,3 +1,4 @@
+  
 
 #ifndef __BOARD_H
 #define __BOARD_H
@@ -11,6 +12,7 @@ extern "C" {
 #define MOWGLI_SW_VERSION_MAJOR              1
 #define MOWGLI_SW_VERSION_BRANCH             0              /* even = stable, odd = testing/unstable */
 #define MOWGLI_SW_VERSION_MINOR              1
+
 
 /*
  * at the moment this really only works for BOARD_YARDFORCE500
@@ -57,6 +59,11 @@ extern "C" {
     #define MIN_CHARGE_CURRENT                  0.1f
     #define LOW_BAT_THRESHOLD                   25.2f /* near 20% SOC */
     #define LOW_CRI_THRESHOLD                   24.5f /* near 5% SOC */
+
+    // when the battery voltage reaches this we stop charging
+    #define BAT_CHARGE_CUTOFF_VOLTAGE           28.80
+    // maximum voltage that we will ever supply to the battery
+    #define MAX_CHARGE_VOLTAGE                  29.4
 
     // Emergency sensor timeouts
     #define WHEEL_LIFT_EMERGENCY_MILLIS         500

@@ -2,10 +2,11 @@
   ******************************************************************************
   * @file    main.c
   * @author  Georg Swoboda <cn@warp.at>
+  * @date    21/09/2022  
+  * @version 1.0.0
   * @brief   main / bootup and initialization, motor control routines, usb init
-  ******************************************************************************
-  * Version 1.0 
-  * 
+  ****************************************************************************** 
+  *  
   * compile with -DBOARD_YARDFORCE500 to enable the YF500 GForce pinout
   * 
   * ROS integration howto taken from here: https://github.com/Itamare4/ROS_stm32f1_rosserial_USB_VCP (Itamar Eliakim)
@@ -25,6 +26,9 @@
 // stm32 custom
 #include "board.h"
 #include "panel.h"
+#include "panel.h"
+#include "blademotor.h"
+#include "drivemotor.h"
 #include "emergency.h"
 #include "blademotor.h"
 #include "drivemotor.h"
@@ -42,9 +46,8 @@
 #include "cpp_main.h"
 #include "ringbuffer.h"
 
-
 static void WATCHDOG_vInit(void);
-static void WATCHDOG_Refresh(void);
+static void WATCHDOG_Refresh(void); 
 
 static nbt_t main_chargecontroller_nbt;
 static nbt_t main_statusled_nbt;
@@ -53,11 +56,12 @@ static nbt_t main_ultrasonicsensor_nbt;
 static nbt_t main_blademotor_nbt;
 static nbt_t main_drivemotor_nbt;
 static nbt_t main_wdg_nbt;
-
+static nbt_t main_buzzer_nbt;
 
 
 
 // MASTER rx buffering
+/*
 static uint8_t master_rcvd_data;
 volatile uint8_t  master_rx_buf[32];
 volatile uint32_t master_rx_buf_idx = 0;
@@ -65,6 +69,7 @@ volatile uint8_t  master_rx_buf_crc = 0;
 volatile uint8_t  master_rx_LENGTH = 0;
 volatile uint8_t  master_rx_CRC = 0;
 volatile uint8_t  master_rx_STATUS = RX_WAIT;
+*/
 // MASTER tx buffering
 volatile uint8_t  master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
@@ -92,6 +97,9 @@ volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage;
 
 union FtoU ampere_acc;
 union FtoU charge_current_offset;
+uint8_t do_chirp_duration_counter;
+uint8_t do_chirp = 0;
+
 // exported via rostopics
 float_t SOC = 0;
 float_t battery_voltage;
@@ -291,6 +299,7 @@ int main(void)
     NBT_init(&main_blademotor_nbt, 100);
     NBT_init(&main_drivemotor_nbt, 10);
     NBT_init(&main_wdg_nbt,10);
+    NBT_init(&main_buzzer_nbt,200);
 
     DB_TRACE(" * NBT Main timers initialized\r\n");   
 
@@ -353,12 +362,28 @@ int main(void)
             
 
 	    }
+
+      if (NBT_handler(&main_buzzer_nbt))
+      {            
+            // TODO 
+          if (do_chirp)
+          {
+            TIM3_Handle.Instance->CCR4 = 10; // chirp on
+            do_chirp = 0;
+            do_chirp_duration_counter = 0;
+          }
+          if (do_chirp_duration_counter == 1)
+          {
+            TIM3_Handle.Instance->CCR4 = 0; // chirp off
+          }
+          do_chirp_duration_counter++;
+      }
         
 #ifndef I_DONT_NEED_MY_FINGERS
-		if (NBT_handler(&main_emergency_nbt))
-		{
-			EmergencyController();
-		}
+        if (NBT_handler(&main_emergency_nbt))
+        {
+            EmergencyController();
+        }
 #endif        
     }
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1110,7 +1135,8 @@ void MX_DMA_Init(void)
   /* DMA1_Channel6_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
-  /* DMA1_Channel7_IRQn interrupt configuration */
+  /* DMA1_Channel7_IRQn interrupt configuration (DRIVE MOTORS)  */
+
   HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
   /* DMA2_Channel3_IRQn interrupt configuration */
@@ -1119,6 +1145,13 @@ void MX_DMA_Init(void)
   /* DMA2_Channel4_5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Channel4_5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Channel4_5_IRQn);
+
+   /* DMA1_Channel2_IRQn interrupt configuration  (BLADE MOTOR)  */
+  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* DMA1_Channel3_IRQn interrupt configuration (BLADE MOTOR) */
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
 }
 
@@ -1383,6 +1416,9 @@ void MASTER_Transmit(uint8_t *buffer, uint8_t len)
     HAL_UART_Transmit_DMA(&MASTER_USART_Handler, (uint8_t*)master_tx_buffer, master_tx_buffer_len); // send message via UART       
 }
 
+/*
+ * Initialize Watchdog - not tested yet (by Nekraus)
+ */
 static void WATCHDOG_vInit(void)
 {
   #if defined(DB_ACTIVE)
@@ -1426,6 +1462,9 @@ static void WATCHDOG_vInit(void)
   }
 } /* WATCHDOG_vInit() */
 
+/*
+ * Feed the watchdog every 10ms
+ */
 static void WATCHDOG_Refresh(void){
   /* Update WWDG counter */
   WwdgHandle.Instance = WWDG;
