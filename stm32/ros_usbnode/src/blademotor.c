@@ -54,8 +54,8 @@ DMA_HandleTypeDef hdma_uart3_tx;
 static BLADEMOTOR_STATE_e blademotor_eState = BLADEMOTOR_INIT_1;
 
 bool BLADEMOTOR_bActivated = false;
-uint16_t BLADEMOTOR_u16Counter1 = 0;
-uint16_t BLADEMOTOR_u16Counter2 = 0;
+uint16_t BLADEMOTOR_u16RPM = 0;
+uint16_t BLADEMOTOR_u16Power = 0;
 
 static uint8_t blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG] = {0};
 static uint8_t blademotor_pu8RqstMessage[BLADEMOTOR_LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xA2};
@@ -213,8 +213,8 @@ void BLADEMOTOR_ReceiveIT(void)
             else{
                 BLADEMOTOR_bActivated = false;
             }
-            BLADEMOTOR_u16Counter1 = blademotor_pu8ReceivedData[7] + (blademotor_pu8ReceivedData[8]<<8);
-            BLADEMOTOR_u16Counter2 = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;           
+            BLADEMOTOR_u16RPM = blademotor_pu8ReceivedData[7] + (blademotor_pu8ReceivedData[8]<<8);
+            BLADEMOTOR_u16Power = blademotor_pu8ReceivedData[9] + (blademotor_pu8ReceivedData[10]<<8) ;           
         }
   
     }

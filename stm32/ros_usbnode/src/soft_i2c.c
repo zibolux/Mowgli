@@ -69,7 +69,7 @@ void SW_I2C_Init(void)
     
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
 
 
     GPIO_InitStruct.Pin   = SW_I2C1_SCL_PIN;
@@ -178,6 +178,7 @@ void scl_out_mode(void)
 
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;		// error point GPIO_Mode_Out_PP	
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
 
     GPIO_InitStruct.Pin   = SW_I2C1_SCL_PIN;
     HAL_GPIO_Init(SW_I2C1_SCL_GPIO, &GPIO_InitStruct);

@@ -16,6 +16,7 @@ void chatter_handler();
 void motors_handler();
 void panel_handler();
 void broadcast_handler();
+void ultrasonic_handler();
 
 #ifdef __cplusplus
 }

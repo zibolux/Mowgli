@@ -49,7 +49,7 @@ void I2C_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   I2C_Handle.Instance = I2C1;
-  I2C_Handle.Init.ClockSpeed = 400000;
+  I2C_Handle.Init.ClockSpeed = 200000;
   I2C_Handle.Init.DutyCycle = I2C_DUTYCYCLE_2;
   I2C_Handle.Init.OwnAddress1 = 0;
   I2C_Handle.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
@@ -200,10 +200,6 @@ uint8_t I2C_TestZLowINT(void)
     lis3dh_int1_src_t int1_src;
     lis3dh_int1_gen_source_get(&dev_ctx, &int1_src); 
     
-    //if (int1_src.ia == 1)       
-    //{
-    //    debug_printf("int1_src.ia: %d int1_src.zl: %d\r\n", int1_src.ia, int1_src.zl);        
-    //}
     return(int1_src.zl && int1_src.ia);
 }
 

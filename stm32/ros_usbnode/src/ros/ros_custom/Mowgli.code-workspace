@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "../../../../.."
+		},
+		{
+			"name": "ros_usbnode",
+			"path": "../../.."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"blademotor.h": "c",
+			"main.h": "c",
+			"panel.h": "c"
+		}
+	}
+}

@@ -287,11 +287,11 @@ void IMU_Calibrate()
     /***************************************************/
     /* load magnetometer calibration (hard/soft iron)  */
     /****************************************************/  
-    /*  
-    onboard_imu_mag_bias[0] = SPIFLASH_ReadDouble("mag_bias_x");
-    onboard_imu_mag_bias[1] = SPIFLASH_ReadDouble("mag_bias_y");
-    onboard_imu_mag_bias[2] = SPIFLASH_ReadDouble("mag_bias_z");
-    debug_printf("   >> Onboard IMU Calibration magentometer biases (hard iron) [%f %f %f]\r\n", onboard_imu_mag_bias[0],  onboard_imu_mag_bias[1],  onboard_imu_mag_bias[2]); 
+    /*
+    external_imu_mag_bias[0] = SPIFLASH_ReadDouble("mag_bias_x");
+    external_imu_mag_bias[1] = SPIFLASH_ReadDouble("mag_bias_y");
+    external_imu_mag_bias[2] = SPIFLASH_ReadDouble("mag_bias_z");
+    debug_printf("   >> external IMU Calibration magentometer biases (hard iron) [%f %f %f]\r\n", external_imu_mag_bias[0],  external_imu_mag_bias[1],  external_imu_mag_bias[2]); 
 
     // ROW 0
     external_imu_mag_cal_matrix[0][0] = SPIFLASH_ReadDouble("mag_dist_00");
@@ -302,13 +302,13 @@ void IMU_Calibrate()
     external_imu_mag_cal_matrix[1][1] = SPIFLASH_ReadDouble("mag_dist_11");
     external_imu_mag_cal_matrix[1][2] = SPIFLASH_ReadDouble("mag_dist_12");
     // ROW 2
-    onboard_imu_mag_cal_matrix[2][0] = SPIFLASH_ReadDouble("mag_dist_20");
-    onboard_imu_mag_cal_matrix[2][1] = SPIFLASH_ReadDouble("mag_dist_21");
-    onboard_imu_mag_cal_matrix[2][2] = SPIFLASH_ReadDouble("mag_dist_22");
-    debug_printf("   >> Onboard IMU Calibration magentometer compensation (soft iron)\r\n");
-    debug_printf("       [ %f\t%f\t%f\r\n", onboard_imu_mag_cal_matrix[0][0], onboard_imu_mag_cal_matrix[0][1], onboard_imu_mag_cal_matrix[0][2]); 
-    debug_printf("         %f\t%f\t%f\r\n", onboard_imu_mag_cal_matrix[1][0], onboard_imu_mag_cal_matrix[1][1], onboard_imu_mag_cal_matrix[1][2]); 
-    debug_printf("         %f\t%f\t%f ]\r\n", onboard_imu_mag_cal_matrix[2][0], onboard_imu_mag_cal_matrix[2][1], onboard_imu_mag_cal_matrix[2][2]);     
+    external_imu_mag_cal_matrix[2][0] = SPIFLASH_ReadDouble("mag_dist_20");
+    external_imu_mag_cal_matrix[2][1] = SPIFLASH_ReadDouble("mag_dist_21");
+    external_imu_mag_cal_matrix[2][2] = SPIFLASH_ReadDouble("mag_dist_22");
+    debug_printf("   >> external IMU Calibration magentometer compensation (soft iron)\r\n");
+    debug_printf("       [ %f\t%f\t%f\r\n", external_imu_mag_cal_matrix[0][0], external_imu_mag_cal_matrix[0][1], external_imu_mag_cal_matrix[0][2]); 
+    debug_printf("         %f\t%f\t%f\r\n", external_imu_mag_cal_matrix[1][0], external_imu_mag_cal_matrix[1][1], external_imu_mag_cal_matrix[1][2]); 
+    debug_printf("         %f\t%f\t%f ]\r\n", external_imu_mag_cal_matrix[2][0], external_imu_mag_cal_matrix[2][1], external_imu_mag_cal_matrix[2][2]);     
     */
 }
 

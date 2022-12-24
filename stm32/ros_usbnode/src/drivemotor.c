@@ -53,7 +53,7 @@ typedef struct
     /* 8*/ uint16_t u16_ukndata0;
     /*10*/ uint8_t u8_left_power;
     /*11*/ uint8_t u8_right_power;
-    /*12*/ uint8_t u8_notused1;
+    /*12*/ uint8_t u8_error;
     /*13*/ uint16_t u16_left_ticks;
     /*15*/ uint16_t u16_right_ticks;
     /*17*/ uint8_t u8_left_ukn;
@@ -214,6 +214,22 @@ void DRIVEMOTOR_App_10ms(void){
             
             /* prepare to receive the message before to launch the command */
             HAL_UART_Receive_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)&drivemotor_psReceivedData, sizeof(DRIVEMOTORS_data_t));
+            /* error State*/
+            if(drivemotor_psReceivedData.u8_error != 0){
+                drivemotor_pu8RqstMessage[0] = 0x55;
+                drivemotor_pu8RqstMessage[1] = 0xaa;
+                drivemotor_pu8RqstMessage[2] = 0x08;
+                drivemotor_pu8RqstMessage[3] = 0x10;
+                drivemotor_pu8RqstMessage[4] = 0x80;
+                drivemotor_pu8RqstMessage[5] = 0;
+                drivemotor_pu8RqstMessage[6] = 0;
+                drivemotor_pu8RqstMessage[7] = 0;
+                drivemotor_pu8RqstMessage[9] = 0;
+                drivemotor_pu8RqstMessage[8] = 0;
+                drivemotor_pu8RqstMessage[10] = 0;
+                drivemotor_pu8RqstMessage[11] = crcCalc(drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG - 1);
+            }            
+
             HAL_UART_Transmit_DMA(&DRIVEMOTORS_USART_Handler, (uint8_t*)drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG);
             break;
         
@@ -307,6 +323,7 @@ void DRIVEMOTOR_App_Rx(void){
             prev_right_direction = right_direction;
             
             drivemotors_eRxFlag = RX_WAIT;                    // ready for next message      
+
     }
 }
 
@@ -338,6 +355,8 @@ void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_d
         direction |= 0x80;
     }
 
+
+
     drivemotor_pu8RqstMessage[0]= 0x55 ;
     drivemotor_pu8RqstMessage[1]= 0xaa ;
     drivemotor_pu8RqstMessage[2]= 0x08 ;
@@ -346,9 +365,9 @@ void DRIVEMOTOR_SetSpeed(uint8_t left_speed, uint8_t right_speed, uint8_t left_d
     drivemotor_pu8RqstMessage[5] = direction;
     drivemotor_pu8RqstMessage[6] = left_speed;
     drivemotor_pu8RqstMessage[7] = right_speed;
-    drivemotor_pu8RqstMessage[9]= 0x00 ;
-    drivemotor_pu8RqstMessage[8] = 0x00;
-    drivemotor_pu8RqstMessage[10] = 0x00;
+    drivemotor_pu8RqstMessage[9]= 0;
+    drivemotor_pu8RqstMessage[8] = 0;
+    drivemotor_pu8RqstMessage[10] = 0;
     drivemotor_pu8RqstMessage[11] = crcCalc(drivemotor_pu8RqstMessage, DRIVEMOTOR_LENGTH_RQST_MSG-1);
 }
 

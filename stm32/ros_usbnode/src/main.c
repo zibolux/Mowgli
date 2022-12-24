@@ -93,7 +93,7 @@ union FtoU{
 int blade_motor = 0;
 
 static uint8_t panel_rcvd_data;
-volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage;
+volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage,input_PC2;
 
 union FtoU ampere_acc;
 union FtoU charge_current_offset;
@@ -125,6 +125,7 @@ typedef enum{
     ADC2_CHANNEL_CHARGEVOLTAGE,
     ADC2_CHANNEL_BATTERYVOLTAGE,
     ADC2_CHANNEL_CHARGERINPUTVOLTAGE,
+    ADC2_CHANNEL_PC2,
     ADC2_CHANNEL_MAX,
 } ADC2_channelSelection_e;
 ADC2_channelSelection_e adc2_eChannelSelection = ADC2_CHANNEL_CURRENT;
@@ -215,10 +216,12 @@ int main(void)
     DB_TRACE(" * LED initialized\r\n");
     TIM2_Init();
     ADC2_Init();    
-    Perimeter_vInit();
+    //Perimeter_vInit();
     DB_TRACE(" * ADC1 initialized\r\n");  
     TIM3_Init();
     HAL_TIM_PWM_Start(&TIM3_Handle, TIM_CHANNEL_4);    
+    TIM4_Init();
+    HAL_TIM_PWM_Start(&TIM4_Handle, TIM_CHANNEL_3); 
     DB_TRACE(" * Timer3 (Beeper) initialized\r\n"); 
     TF4_Init();
     DB_TRACE(" * 24V switched on\r\n");
@@ -286,8 +289,7 @@ int main(void)
     HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, 0);
     HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1);  
 
-    TIM4_Init();
-    HAL_TIM_PWM_Start(&TIM4_Handle, TIM_CHANNEL_3); 
+  
     
     // Initialize Main Timers
     NBT_init(&main_chargecontroller_nbt, 10);
@@ -297,7 +299,7 @@ int main(void)
     NBT_init(&main_ultrasonicsensor_nbt, 50);
     #endif
     NBT_init(&main_blademotor_nbt, 100);
-    NBT_init(&main_drivemotor_nbt, 10);
+    NBT_init(&main_drivemotor_nbt, 20);
     NBT_init(&main_wdg_nbt,10);
     NBT_init(&main_buzzer_nbt,200);
 
@@ -325,7 +327,11 @@ int main(void)
       broadcast_handler(); 
 
       DRIVEMOTOR_App_Rx();
-      Perimeter_vApp();
+      //Perimeter_vApp();
+      /* try to send ros message without delay*/
+      if(ULTRASONIC_MessageReceived() == 1){
+        ultrasonic_handler();
+      }
 
       if (NBT_handler(&main_chargecontroller_nbt))
 	    {            
@@ -355,12 +361,7 @@ int main(void)
       
       if (NBT_handler(&main_blademotor_nbt))
 	    {            
-			  BLADEMOTOR_App();       
-        DB_TRACE(" Charge Voltage: %2.2fV, Battery Voltage: %2.2fV, Current: %fA \r\n", charge_voltage, battery_voltage,charge_current);
-        //DB_TRACE(" A acc: %fA, SOC: %2.2f \r\n", ampere_acc.f, SOC); 
-        DB_TRACE(" SmoothMag  L:%.1f M:%.1f R:%.1f \r\n", smoothMag[COIL_LEFT], smoothMag[COIL_MIDDLE],smoothMag[COIL_RIGHT]);
-            
-
+			  BLADEMOTOR_App();     
 	    }
 
       if (NBT_handler(&main_buzzer_nbt))
@@ -369,12 +370,14 @@ int main(void)
           if (do_chirp)
           {
             TIM3_Handle.Instance->CCR4 = 10; // chirp on
+            TIM4_Handle.Instance->CCR3 = 10; // chirp on
             do_chirp = 0;
             do_chirp_duration_counter = 0;
           }
           if (do_chirp_duration_counter == 1)
           {
             TIM3_Handle.Instance->CCR4 = 0; // chirp off
+            TIM4_Handle.Instance->CCR3 = 0; // chirp off
           }
           do_chirp_duration_counter++;
       }
@@ -523,12 +526,19 @@ void HALLSTOP_Sensor_Init()
 }
 
 /**
- * @brief Poll HALLSTOP Sensor
- * @retval 1 if right, 2 if left, 3 if both, 0 if no stop sensor trigger
+ * @brief Poll HALLSTOP_Left_Sense Sensor
+ * @retval  1 if trigger , 0 if no stop sensor trigger
  */
-int HALLSTOP_Sense(void)
-{
-  return(!HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_3))<<1 | (!HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_2)); // pullup, active low
+int HALLSTOP_Left_Sense(void){
+  return(HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_2));
+}
+
+/**
+ * @brief Poll HALLSTOP_Right_Sense
+ * @retval 1 if trigger , 0 if no stop sensor trigger
+ */
+int HALLSTOP_Right_Sense(void){
+  return(HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_3));
 }
 
 /**
@@ -699,10 +709,15 @@ void ADC2_Init(void)
     PA1     ------> Charge Current
     PA2     ------> Charge Voltage
     PA3     ------> Battery Voltage
+    PA7     ------> Charger Voltage
     */
     GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_7;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_2;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
     /* USER CODE BEGIN ADC1_Init 0 */
 
@@ -794,6 +809,16 @@ void adc2_SetChannel(ADC2_channelSelection_e channel){
 
   case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
     sConfig.Channel = ADC_CHANNEL_7; // PA7 Charger Input voltage
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+    if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
+    {
+       Error_Handler();
+    }
+    break;
+
+  case ADC2_CHANNEL_PC2:
+    sConfig.Channel = ADC_CHANNEL_13; // PC2 
     sConfig.Rank = ADC_REGULAR_RANK_1;
     sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
     if (HAL_ADC_ConfigChannel(&ADC2_Handle, &sConfig) != HAL_OK)
@@ -1366,8 +1391,10 @@ void chirp(uint8_t count)
     for (i=0;i<count;i++)
     {
         TIM3_Handle.Instance->CCR4 = 10;    
+        TIM4_Handle.Instance->CCR3 = 10;
         HAL_Delay(100);
         TIM3_Handle.Instance->CCR4 = 0;   
+        TIM4_Handle.Instance->CCR3 = 0; 
         HAL_Delay(50);
     }
 }
@@ -1517,6 +1544,11 @@ void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
     case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
       tmp = (l_u16Rawdata/4095.0f)*3.3f * (32/2);
       chargerInputVoltage = 0.5*tmp+0.5*chargerInputVoltage;
+      break;
+
+    case ADC2_CHANNEL_PC2:
+      tmp = (l_u16Rawdata/4095.0f)*3.3f;
+      input_PC2 = 0.5*tmp+0.5*input_PC2;
       break;
 
     case ADC2_CHANNEL_MAX:

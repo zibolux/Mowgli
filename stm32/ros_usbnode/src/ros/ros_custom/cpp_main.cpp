@@ -22,6 +22,7 @@
 #include "emergency.h"
 #include "drivemotor.h"
 #include "blademotor.h"
+#include "ultrasonic_sensor.h"
 #include "spiflash.h"
 #include "stm32f1xx_hal.h"
 #include "ringbuffer.h"
@@ -48,6 +49,7 @@
 #include "imu/imu.h"
 #include "sensor_msgs/Imu.h"
 #include "sensor_msgs/MagneticField.h"
+#include "sensor_msgs/Range.h"
 #include "sensor_msgs/Temperature.h"
 #include "mowgli/magnetometer.h"
 
@@ -60,17 +62,17 @@
 #include "mowgli/status.h"
 
 
-#define MAX_MPS	  	0.6		 	// Allow maximum speed of 0.6 m/s 
+#define MAX_MPS	  	0.5		 	// Allow maximum speed of 0.5 m/s 
 #define PWM_PER_MPS 300.0		// PWM value of 300 means 1 m/s bot speed
 
 #define TICKS_PER_M 250.0		// Motor Encoder ticks per meter
 
-//#define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
-#define WHEEL_BASE  0.285		// The distance between the center of the wheels in meters
+#define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
+//#define WHEEL_BASE  0.285		// The distance between the center of the wheels in meters
 #define WHEEL_DIAMETER 0.198 	// The diameter of the wheels in meters
 
-#define ODOM_NBT_TIME_MS   100 	// 200ms
-#define IMU_NBT_TIME_MS    100  
+#define ODOM_NBT_TIME_MS   100	
+#define IMU_NBT_TIME_MS    20  
 #define MOTORS_NBT_TIME_MS 100
 #define STATUS_NBT_TIME_MS 250
 
@@ -153,6 +155,10 @@ nav_msgs::Odometry odom_msg;
 //std_msgs::UInt32 left_encoder_ticks_msg;
 //std_msgs::UInt32 right_encoder_ticks_msg;
 
+/* ultrasonic sensors */
+sensor_msgs::Range ultrasonic_left_msg;
+sensor_msgs::Range ultrasonic_right_msg;
+
 // IMU
 // external IMU (i2c)
 sensor_msgs::Imu imu_msg;
@@ -192,6 +198,8 @@ ros::Publisher pubIMU("imu/data_raw", &imu_msg);
 ros::Publisher pubIMUMag("imu/mag", &imu_mag_msg);
 ros::Publisher pubIMUMagCalibration("imu/mag_calibration", &imu_mag_calibration_msg);
 
+ros::Publisher pubLeftUltrasonic("ultrasonic/left", &ultrasonic_left_msg);
+ros::Publisher pubRightUltrasonic("ultrasonic/right", &ultrasonic_left_msg);
 
 /*
  * SUBSCRIBERS
@@ -324,7 +332,9 @@ extern "C" void chatter_handler()
 //		  pubBladeState.publish(&bool_blade_state_msg);
 
 #ifdef IMU_ONBOARD_TEMP
-		  imu_onboard_temperature = IMU_Onboard_ReadTemp();
+		  imu_onboard_temperature = IMU_TempRaw();
+	      DB_TRACE("temp : %2.2f \r\n", imu_onboard_temperature);
+
 #else
 		  imu_onboard_temperature = -100;
 #endif
@@ -396,6 +406,30 @@ extern "C" void panel_handler()
 			buttonupdated=0;
 		}
 	  }
+}
+
+extern "C" void ultrasonic_handler(void)
+{
+	ultrasonic_left_msg.header.stamp = nh.now();
+	ultrasonic_left_msg.header.frame_id = "ultrasonic_left_link";
+	ultrasonic_right_msg.header.stamp = nh.now();
+	ultrasonic_right_msg.header.frame_id = "ultrasonic_right_link";
+
+	ultrasonic_left_msg.radiation_type = 0;
+	ultrasonic_left_msg.field_of_view  = 1.047; /* 60°*/
+	ultrasonic_left_msg.min_range = 0.30;
+	ultrasonic_left_msg.max_range  = 4.0;
+	ultrasonic_left_msg.range = (float)(ULTRASONICSENSOR_u32GetLeftDistance())/10000;
+
+	ultrasonic_right_msg.radiation_type = 0;
+	ultrasonic_right_msg.field_of_view  = 1.047; /* 60°*/
+	ultrasonic_right_msg.min_range = 0.30;
+	ultrasonic_right_msg.max_range  = 4.0;
+	ultrasonic_right_msg.range = (float)(ULTRASONICSENSOR_u32GetRightDistance())/10000;
+
+	pubLeftUltrasonic.publish(&ultrasonic_left_msg);
+	pubRightUltrasonic.publish(&ultrasonic_right_msg);
+
 }
 
 extern "C" void broadcast_handler()
@@ -492,6 +526,8 @@ extern "C" void broadcast_handler()
 		////////////////////////////////////////		
 		status_msg.stamp = nh.now();
 		status_msg.rain_detected = RAIN_Sense();
+		status_msg.emergency_left_stop = HALLSTOP_Left_Sense();
+		status_msg.emergency_right_stop = HALLSTOP_Right_Sense();
 		status_msg.emergency_tilt_mech_triggered = Emergency_Tilt();
 		status_msg.emergency_tilt_accel_triggered = Emergency_LowZAccelerometer();
 		status_msg.emergency_left_wheel_lifted = Emergency_WheelLiftBlue();
@@ -886,6 +922,9 @@ extern "C" void init_ROS()
 	//nh.advertise(pubChargePWM);
 	nh.advertise(pubOdom);
 
+	nh.advertise(pubLeftUltrasonic);
+	nh.advertise(pubRightUltrasonic);
+
 	//nh.advertise(pubBladeState);
 	//nh.advertise(pubChargeingState);
 	//nh.advertise(pubLeftEncoderTicks);
@@ -918,4 +957,5 @@ extern "C" void init_ROS()
 	NBT_init(&motors_nbt, MOTORS_NBT_TIME_MS);
 	NBT_init(&odom_nbt, ODOM_NBT_TIME_MS);
 	NBT_init(&ros_nbt, 10);	
+	
 }

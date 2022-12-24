@@ -120,14 +120,14 @@ void SPI3_Init();
 void SPI3_DeInit();
 
 
-
-
 // UART Wrapper functions to hide HAL bullshit ...
 void MASTER_Transmit(uint8_t *buffer, uint8_t len);
 void DRIVEMOTORS_Transmit(uint8_t *buffer, uint8_t len);
 
 // Sensor Wrapper functions
 int RAIN_Sense(void);
+int HALLSTOP_Left_Sense(void);
+int HALLSTOP_Right_Sense(void);
 
 void debug_printf(const char *fmt, ...);
 

@@ -26,11 +26,15 @@ const uint8_t ultrasonic_PreAmbule[5]  = {0x55,0xAA,0x06,0x70,0x39};
 
 static uint8_t ultrasonic_pu8ReceivedData[10] = {0};
 
+static uint8_t ultrasonic_RxFlag = 0;
+
 static uint32_t ultrasonic_u32LeftDistance = 0;
 static uint32_t ultrasonic_u32RightDistance = 0;
 
 void ULTRASONICSENSOR_Init(void){
     ultrasonic_state = ULTRASONIC_INIT_1;
+    ultrasonic_u32LeftDistance = 0;
+    ultrasonic_u32RightDistance = 0;
 }
 
 void ULTRASONICSENSOR_App(void){
@@ -70,6 +74,24 @@ void ULTRASONICSENSOR_ReceiveIT(void)
         ultrasonic_u32RightDistance  = (ultrasonic_pu8ReceivedData[7] << 8) + ultrasonic_pu8ReceivedData[8];
 
         //DB_TRACE(" R: %dmm, L: %dmm \r\n",ultrasonic_u32RightDistance/10,ultrasonic_u32LeftDistance/10);
-  
+        ultrasonic_RxFlag = 1;
     }
+}
+
+uint32_t ULTRASONIC_MessageReceived(void){
+    if(ultrasonic_RxFlag == 1){
+        ultrasonic_RxFlag = 0; /* rest flags*/
+        return 1;
+    }
+    else{
+        return 0;
+    }
+}
+
+uint32_t ULTRASONICSENSOR_u32GetLeftDistance(void){
+    return ultrasonic_u32LeftDistance;
+}
+
+uint32_t ULTRASONICSENSOR_u32GetRightDistance(void){
+    return ultrasonic_u32RightDistance;
 }

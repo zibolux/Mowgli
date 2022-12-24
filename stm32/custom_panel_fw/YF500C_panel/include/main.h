@@ -52,6 +52,9 @@ extern "C" {
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
+bool HALLSTOP_Left_Sense(void);
+bool HALLSTOP_Right_Sense(void);
+
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

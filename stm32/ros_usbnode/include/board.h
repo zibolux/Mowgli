@@ -10,7 +10,7 @@ extern "C" {
 // this is the sofware version that any other Mowgli components like MowgliRover will match against
 
 #define MOWGLI_SW_VERSION_MAJOR              1
-#define MOWGLI_SW_VERSION_BRANCH             0              /* even = stable, odd = testing/unstable */
+#define MOWGLI_SW_VERSION_BRANCH             11              /* even = stable, odd = testing/unstable */
 #define MOWGLI_SW_VERSION_MINOR              1
 
 
@@ -32,7 +32,7 @@ extern "C" {
     #define DEBUG_TYPE_UART 1 
     #define DEBUG_TYPE_SWO 2
 
-    #define DEBUG_TYPE DEBUG_TYPE_SWO
+    #define DEBUG_TYPE 2
 
     #define OPTION_ULTRASONIC 1
 
@@ -61,14 +61,14 @@ extern "C" {
     #define LOW_CRI_THRESHOLD                   24.5f /* near 5% SOC */
 
     // Emergency sensor timeouts
-    #define WHEEL_LIFT_EMERGENCY_MILLIS         500
+    #define WHEEL_LIFT_EMERGENCY_MILLIS         1000
     #define TILT_EMERGENCY_MILLIS               500      // used for both the mechanical and accelerometer based detection
     #define STOP_BUTTON_EMERGENCY_MILLIS        20
     #define PLAY_BUTTON_CLEAR_EMERGENCY_MILLIS  2000
     #define IMU_ONBOARD_INCLINATION_THRESHOLD   0x38     // stock firmware uses 0x2C (way more allowed inclination)
 
     // IMU configuration options
-    #define IMU_ONBOARD_ACCELERATION            1
+    //#define IMU_ONBOARD_ACCELERATION            0
     #define IMU_ONBOARD_TEMP                    1
     #define IMU_ACCELERATION                    1       // external IMU
     #define IMU_ANGULAR                         1       // external IMU
