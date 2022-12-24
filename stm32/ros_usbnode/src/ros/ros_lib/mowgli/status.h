@@ -17,6 +17,10 @@ namespace mowgli
       _stamp_type stamp;
       typedef bool _rain_detected_type;
       _rain_detected_type rain_detected;
+      typedef bool _emergency_left_stop_type;
+      _emergency_left_stop_type emergency_left_stop;
+      typedef bool _emergency_right_stop_type;
+      _emergency_right_stop_type emergency_right_stop;
       typedef bool _emergency_left_wheel_lifted_type;
       _emergency_left_wheel_lifted_type emergency_left_wheel_lifted;
       typedef bool _emergency_right_wheel_lifted_type;
@@ -63,6 +67,8 @@ namespace mowgli
     status():
       stamp(),
       rain_detected(0),
+      emergency_left_stop(0),
+      emergency_right_stop(0),
       emergency_left_wheel_lifted(0),
       emergency_right_wheel_lifted(0),
       emergency_tilt_accel_triggered(0),
@@ -107,6 +113,20 @@ namespace mowgli
       u_rain_detected.real = this->rain_detected;
       *(outbuffer + offset + 0) = (u_rain_detected.base >> (8 * 0)) & 0xFF;
       offset += sizeof(this->rain_detected);
+      union {
+        bool real;
+        uint8_t base;
+      } u_emergency_left_stop;
+      u_emergency_left_stop.real = this->emergency_left_stop;
+      *(outbuffer + offset + 0) = (u_emergency_left_stop.base >> (8 * 0)) & 0xFF;
+      offset += sizeof(this->emergency_left_stop);
+      union {
+        bool real;
+        uint8_t base;
+      } u_emergency_right_stop;
+      u_emergency_right_stop.real = this->emergency_right_stop;
+      *(outbuffer + offset + 0) = (u_emergency_right_stop.base >> (8 * 0)) & 0xFF;
+      offset += sizeof(this->emergency_right_stop);
       union {
         bool real;
         uint8_t base;
@@ -260,6 +280,22 @@ namespace mowgli
       union {
         bool real;
         uint8_t base;
+      } u_emergency_left_stop;
+      u_emergency_left_stop.base = 0;
+      u_emergency_left_stop.base |= ((uint8_t) (*(inbuffer + offset + 0))) << (8 * 0);
+      this->emergency_left_stop = u_emergency_left_stop.real;
+      offset += sizeof(this->emergency_left_stop);
+      union {
+        bool real;
+        uint8_t base;
+      } u_emergency_right_stop;
+      u_emergency_right_stop.base = 0;
+      u_emergency_right_stop.base |= ((uint8_t) (*(inbuffer + offset + 0))) << (8 * 0);
+      this->emergency_right_stop = u_emergency_right_stop.real;
+      offset += sizeof(this->emergency_right_stop);
+      union {
+        bool real;
+        uint8_t base;
       } u_emergency_left_wheel_lifted;
       u_emergency_left_wheel_lifted.base = 0;
       u_emergency_left_wheel_lifted.base |= ((uint8_t) (*(inbuffer + offset + 0))) << (8 * 0);
@@ -400,7 +436,7 @@ namespace mowgli
     }
 
     virtual const char * getType() override { return "mowgli/status"; };
-    virtual const char * getMD5() override { return "15c620b7cc55c2285587da2dc5df3c34"; };
+    virtual const char * getMD5() override { return "3eb8e43ddfadd59d2ddcb2c510fcd31d"; };
 
   };
 
