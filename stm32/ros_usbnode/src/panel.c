@@ -24,6 +24,7 @@
 #define PANEL_LENGTH_RQST_MSG 18
 #define PANEL_LENGTH_RECEIVED_MSG 20
 
+void PANEL_SendLEDMessage(void);
 
 UART_HandleTypeDef PANEL_USART_Handler;
 DMA_HandleTypeDef hdma_uart1_rx;

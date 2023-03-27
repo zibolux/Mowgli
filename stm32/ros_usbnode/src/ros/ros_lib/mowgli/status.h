@@ -17,6 +17,8 @@ namespace mowgli
       _stamp_type stamp;
       typedef bool _rain_detected_type;
       _rain_detected_type rain_detected;
+      typedef uint8_t _emergency_status_type;
+      _emergency_status_type emergency_status;
       typedef bool _emergency_left_stop_type;
       _emergency_left_stop_type emergency_left_stop;
       typedef bool _emergency_right_stop_type;
@@ -53,6 +55,12 @@ namespace mowgli
       _left_power_type left_power;
       typedef uint8_t _right_power_type;
       _right_power_type right_power;
+      typedef uint16_t _blade_power_type;
+      _blade_power_type blade_power;
+      typedef uint16_t _blade_RPM_type;
+      _blade_RPM_type blade_RPM;
+      typedef float _blade_temperature_type;
+      _blade_temperature_type blade_temperature;
       typedef float _imu_temp_type;
       _imu_temp_type imu_temp;
       typedef bool _blade_motor_enabled_type;
@@ -67,6 +75,7 @@ namespace mowgli
     status():
       stamp(),
       rain_detected(0),
+      emergency_status(0),
       emergency_left_stop(0),
       emergency_right_stop(0),
       emergency_left_wheel_lifted(0),
@@ -85,6 +94,9 @@ namespace mowgli
       right_encoder_ticks(0),
       left_power(0),
       right_power(0),
+      blade_power(0),
+      blade_RPM(0),
+      blade_temperature(0.0),
       imu_temp(0),
       blade_motor_enabled(0),
       sw_ver_maj(0),
@@ -113,6 +125,13 @@ namespace mowgli
       u_rain_detected.real = this->rain_detected;
       *(outbuffer + offset + 0) = (u_rain_detected.base >> (8 * 0)) & 0xFF;
       offset += sizeof(this->rain_detected);
+      union {
+        bool real;
+        uint8_t base;
+      } u_emergency_status;
+      u_emergency_status.real = this->emergency_status;
+      *(outbuffer + offset + 0) = (u_emergency_status.base >> (8 * 0)) & 0xFF;
+      offset += sizeof(this->emergency_status);
       union {
         bool real;
         uint8_t base;
@@ -230,6 +249,22 @@ namespace mowgli
       offset += sizeof(this->left_power);
       *(outbuffer + offset + 0) = (this->right_power >> (8 * 0)) & 0xFF;
       offset += sizeof(this->right_power);
+      *(outbuffer + offset + 0) = (this->blade_power >> (8 * 0)) & 0xFF;
+      *(outbuffer + offset + 1) = (this->blade_power >> (8 * 1)) & 0xFF;
+      offset += sizeof(this->blade_power);
+      *(outbuffer + offset + 0) = (this->blade_RPM >> (8 * 0)) & 0xFF;
+      *(outbuffer + offset + 1) = (this->blade_RPM >> (8 * 1)) & 0xFF;
+      offset += sizeof(this->blade_RPM);
+      union {
+        float real;
+        uint32_t base;
+      } u_blade_temperature;
+      u_blade_temperature.real = this->blade_temperature;
+      *(outbuffer + offset + 0) = (u_blade_temperature.base >> (8 * 0)) & 0xFF;
+      *(outbuffer + offset + 1) = (u_blade_temperature.base >> (8 * 1)) & 0xFF;
+      *(outbuffer + offset + 2) = (u_blade_temperature.base >> (8 * 2)) & 0xFF;
+      *(outbuffer + offset + 3) = (u_blade_temperature.base >> (8 * 3)) & 0xFF;
+      offset += sizeof(this->blade_temperature);
       union {
         float real;
         uint32_t base;
@@ -277,6 +312,14 @@ namespace mowgli
       u_rain_detected.base |= ((uint8_t) (*(inbuffer + offset + 0))) << (8 * 0);
       this->rain_detected = u_rain_detected.real;
       offset += sizeof(this->rain_detected);
+      union {
+        bool real;
+        uint8_t base;
+      } u_emergency_status;
+      u_emergency_status.base = 0;
+      u_emergency_status.base |= ((uint8_t) (*(inbuffer + offset + 0))) << (8 * 0);
+      this->rain_detected = u_emergency_status.real;
+      offset += sizeof(this->emergency_status);
       union {
         bool real;
         uint8_t base;
@@ -407,6 +450,23 @@ namespace mowgli
       offset += sizeof(this->left_power);
       this->right_power =  ((uint8_t) (*(inbuffer + offset)));
       offset += sizeof(this->right_power);
+      this->blade_power =  ((uint32_t) (*(inbuffer + offset)));
+      this->blade_power |= ((uint32_t) (*(inbuffer + offset + 1))) << (8 * 1);
+      offset += sizeof(this->blade_power);
+      this->blade_RPM =  ((uint32_t) (*(inbuffer + offset)));
+      this->blade_RPM |= ((uint32_t) (*(inbuffer + offset + 1))) << (8 * 1);
+      offset += sizeof(this->blade_RPM);
+      union {
+        float real;
+        uint32_t base;
+      } u_blade_temperature;
+      u_blade_temperature.base = 0;
+      u_blade_temperature.base |= ((uint32_t) (*(inbuffer + offset + 0))) << (8 * 0);
+      u_blade_temperature.base |= ((uint32_t) (*(inbuffer + offset + 1))) << (8 * 1);
+      u_blade_temperature.base |= ((uint32_t) (*(inbuffer + offset + 2))) << (8 * 2);
+      u_blade_temperature.base |= ((uint32_t) (*(inbuffer + offset + 3))) << (8 * 3);
+      this->blade_temperature = u_blade_temperature.real;
+      offset += sizeof(this->blade_temperature);
       union {
         float real;
         uint32_t base;
@@ -436,7 +496,7 @@ namespace mowgli
     }
 
     virtual const char * getType() override { return "mowgli/status"; };
-    virtual const char * getMD5() override { return "3eb8e43ddfadd59d2ddcb2c510fcd31d"; };
+    virtual const char * getMD5() override { return "418736499e2bb604463e948b427be2c1"; };
 
   };
 

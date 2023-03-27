@@ -143,11 +143,7 @@ float I2C_ReadAccelerometerTemp(void)
     lis3dh_reg_t reg;  
 
     lis3dh_temp_data_ready_get(&dev_ctx, &reg.byte);
-    while (!reg.byte && max_tries) {            
-      lis3dh_temp_data_ready_get(&dev_ctx, &reg.byte);
-      HAL_Delay(1);
-      max_tries--;
-    }
+
     // Read temperature data 
     if (reg.byte)
     {

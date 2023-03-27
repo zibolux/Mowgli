@@ -32,17 +32,18 @@ extern "C" {
     #define DEBUG_TYPE_UART 1 
     #define DEBUG_TYPE_SWO 2
 
-    #define DEBUG_TYPE 2
+    #define DEBUG_TYPE 0
 
-    #define OPTION_ULTRASONIC 1
+    #define OPTION_ULTRASONIC 0
+    #define OPTION_BUMPER 0
 
     // define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
     //#define SUPPORT_ROS_CALIBRATION_IMU           1     
 
-    #define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
+    //#define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
     /// nominal max charge current is 1.5 Amp
-    #define MAX_CHARGE_CURRENT                  1.5f
+    #define MAX_CHARGE_CURRENT                  1.0f
     /// limite voltag when switching in 150mA mode
     #define LIMIT_VOLTAGE_150MA                 29.0f
     /// Max voltage allowed 29.4 
@@ -58,18 +59,18 @@ extern "C" {
     // if current is greater than this assume the battery is charging
     #define MIN_CHARGE_CURRENT                  0.1f
     #define LOW_BAT_THRESHOLD                   25.2f /* near 20% SOC */
-    #define LOW_CRI_THRESHOLD                   24.5f /* near 5% SOC */
+    #define LOW_CRI_THRESHOLD                   23.5f /* near 0% SOC */
 
     // Emergency sensor timeouts
     #define WHEEL_LIFT_EMERGENCY_MILLIS         1000
     #define TILT_EMERGENCY_MILLIS               500      // used for both the mechanical and accelerometer based detection
-    #define STOP_BUTTON_EMERGENCY_MILLIS        20
+    #define STOP_BUTTON_EMERGENCY_MILLIS        100
     #define PLAY_BUTTON_CLEAR_EMERGENCY_MILLIS  2000
     #define IMU_ONBOARD_INCLINATION_THRESHOLD   0x38     // stock firmware uses 0x2C (way more allowed inclination)
 
     // IMU configuration options
     //#define IMU_ONBOARD_ACCELERATION            0
-    #define IMU_ONBOARD_TEMP                    1
+    //#define IMU_ONBOARD_TEMP                    1
     #define IMU_ACCELERATION                    1       // external IMU
     #define IMU_ANGULAR                         1       // external IMU
     

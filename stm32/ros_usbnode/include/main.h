@@ -85,6 +85,7 @@ void chirp(uint8_t count);
 extern float battery_voltage;
 extern float charge_voltage;
 extern float charge_current;
+extern float blade_temperature;
 extern uint16_t  chargecontrol_pwm_val;
 extern uint8_t   chargecontrol_is_charging;
 extern uint8_t do_chirp;

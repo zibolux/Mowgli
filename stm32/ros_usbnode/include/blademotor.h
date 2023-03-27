@@ -50,7 +50,7 @@ extern uint16_t BLADEMOTOR_u16Power;
 
 void BLADEMOTOR_Init(void);
 void BLADEMOTOR_App(void);
-void BLADEMOTOR_ReceiceIT(void);
+void BLADEMOTOR_ReceiveIT(void);
 
 void BLADEMOTOR_Set(uint8_t on_off);
 

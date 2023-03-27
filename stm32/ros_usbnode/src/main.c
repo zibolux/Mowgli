@@ -58,19 +58,6 @@ static nbt_t main_drivemotor_nbt;
 static nbt_t main_wdg_nbt;
 static nbt_t main_buzzer_nbt;
 
-
-
-// MASTER rx buffering
-/*
-static uint8_t master_rcvd_data;
-volatile uint8_t  master_rx_buf[32];
-volatile uint32_t master_rx_buf_idx = 0;
-volatile uint8_t  master_rx_buf_crc = 0;
-volatile uint8_t  master_rx_LENGTH = 0;
-volatile uint8_t  master_rx_CRC = 0;
-volatile uint8_t  master_rx_STATUS = RX_WAIT;
-*/
-// MASTER tx buffering
 volatile uint8_t  master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
 static char master_tx_buffer[255];
@@ -93,7 +80,7 @@ union FtoU{
 int blade_motor = 0;
 
 static uint8_t panel_rcvd_data;
-volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage,input_PC2;
+volatile float batteryVoltage,current,chargerVoltage,chargerInputVoltage,input_PC3;
 
 union FtoU ampere_acc;
 union FtoU charge_current_offset;
@@ -105,8 +92,10 @@ float_t SOC = 0;
 float_t battery_voltage;
 float_t charge_voltage;
 float_t charge_current;
+float_t blade_temperature;
 uint16_t chargecontrol_pwm_val = MIN_CHARGE_PWM;
 uint8_t  chargecontrol_is_charging = 0;
+
 
 UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
 
@@ -317,7 +306,10 @@ int main(void)
     DB_TRACE(" * ROS serial node initialized\r\n");     
     DB_TRACE("\r\n >>> entering main loop ...\r\n\r\n"); 
     // <chirp><chirp> means we are in the main loop 
-    chirp(2);    
+    chirp(2);
+
+    //WATCHDOG_vInit();
+
     while (1)
     {        
       chatter_handler();
@@ -360,8 +352,24 @@ int main(void)
 	    }
       
       if (NBT_handler(&main_blademotor_nbt))
-	    {            
-			  BLADEMOTOR_App();     
+	    {     
+        float f_tmp;
+        const float f_RTO = 10000;
+        const float beta = 3380;
+        uint32_t currentTick;
+        static uint32_t old_tick;
+
+			  BLADEMOTOR_App();   
+        /*calculation for NTC temperature*/
+        f_tmp = input_PC3 * 10000;               //Resistance of RT
+        f_tmp = log(f_tmp / f_RTO);
+        f_tmp = (1 / ((f_tmp / beta) + (1 / (273.15+25)))); //Temperature from thermistor
+        blade_temperature = f_tmp - 273.15;                 //Conversion to Celsius  
+
+        //DB_TRACE(" temp : %.2f \n",blade_temperature);
+        currentTick = HAL_GetTick();
+        DB_TRACE("t: %d \n",(currentTick-old_tick));
+        old_tick = currentTick;
 	    }
 
       if (NBT_handler(&main_buzzer_nbt))
@@ -530,7 +538,11 @@ void HALLSTOP_Sensor_Init()
  * @retval  1 if trigger , 0 if no stop sensor trigger
  */
 int HALLSTOP_Left_Sense(void){
+  #if OPTION_BUMPER == 1
   return(HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_2));
+  #else 
+  return 0;
+  #endif
 }
 
 /**
@@ -538,7 +550,11 @@ int HALLSTOP_Left_Sense(void){
  * @retval 1 if trigger , 0 if no stop sensor trigger
  */
 int HALLSTOP_Right_Sense(void){
+   #if OPTION_BUMPER == 1
   return(HAL_GPIO_ReadPin(HALLSTOP_PORT, GPIO_PIN_3));
+  #else 
+  return 0;
+   #endif
 }
 
 /**
@@ -1217,8 +1233,8 @@ void ChargeController(void)
           HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR3, charge_current_offset.u[0]);    
           HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR4, charge_current_offset.u[1]);   
           HAL_PWR_DisableBkUpAccess(); 
-            HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1); /* Power on the battery  Powerbus */
-            charger_state = CHARGER_STATE_CHARGING_CC;
+          HAL_GPIO_WritePin(TF4_GPIO_PORT, TF4_PIN, 1); /* Power on the battery  Powerbus */
+          charger_state = CHARGER_STATE_CHARGING_CC;
         }
 
         break;
@@ -1450,14 +1466,13 @@ static void WATCHDOG_vInit(void)
 {
   #if defined(DB_ACTIVE)
     /* setup DBGMCU block - stop IWDG at break in debug mode */
-    __DBGMCU_CLK_ENABLE();
-    __HAL_FREEZE_IWDG_DBGMCU();
+        __HAL_FREEZE_IWDG_DBGMCU();
   #endif  /* DB_ACTIVE */
 
   /* change the period to 50ms */
   IwdgHandle.Instance = IWDG;
   IwdgHandle.Init.Prescaler = IWDG_PRESCALER_256;
-  IwdgHandle.Init.Reload = 8U;
+  IwdgHandle.Init.Reload = 0xFFF;
   /* Enable IWDG (LSI automatically enabled by HW) */
 
   /* if window feature is not applied Init() precedes Start() */
@@ -1471,7 +1486,6 @@ static void WATCHDOG_vInit(void)
   /* Initialize WWDG for run time if applicable */
   #if defined(DB_ACTIVE)
     /* setup DBGMCU block - stop WWDG at break in debug mode */
-    __DBGMCU_CLK_ENABLE();
     __HAL_FREEZE_WWDG_DBGMCU();
   #endif  /* DB_ACTIVE */
 
@@ -1479,9 +1493,9 @@ static void WATCHDOG_vInit(void)
   __WWDG_CLK_ENABLE();
   WwdgHandle.Instance = WWDG;
   WwdgHandle.Init.Prescaler = WWDG_PRESCALER_8;
-  WwdgHandle.Init.Counter = 22; /* 20.02 ms*/
-  WwdgHandle.Init.Window = 9; /* 8.19 ms */
-  if( HAL_WWDG_Init(&WwdgHandle) != HAL_OK )
+  WwdgHandle.Init.Counter = 0x7F; /* 40.02 ms*/
+  WwdgHandle.Init.Window = 0x7F; /* 0ms */
+  //if( HAL_WWDG_Init(&WwdgHandle) != HAL_OK )
   {
     #ifdef DB_ACTIVE
       DB_TRACE(" WWDG init Error\n\r");
@@ -1538,7 +1552,7 @@ void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
     
     case ADC2_CHANNEL_BATTERYVOLTAGE:
       tmp = ((float)l_u16Rawdata/4095.0f)*3.3f*10.09 + 0.6f;
-      batteryVoltage = 0.5*tmp+0.5*batteryVoltage;
+      batteryVoltage = 0.4*tmp+0.6*batteryVoltage;
       break;
 
     case ADC2_CHANNEL_CHARGERINPUTVOLTAGE:
@@ -1548,7 +1562,7 @@ void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc){
 
     case ADC2_CHANNEL_PC2:
       tmp = (l_u16Rawdata/4095.0f)*3.3f;
-      input_PC2 = 0.5*tmp+0.5*input_PC2;
+      input_PC3 = 0.5*tmp+0.5*input_PC3;
       break;
 
     case ADC2_CHANNEL_MAX:

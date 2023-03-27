@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 uint8_t Emergency_State(void);
+void Emergency_ResetState(void);
 int Emergency_Tilt(void);
 int Emergency_StopButtonYellow(void);
 int Emergency_StopButtonWhite(void);

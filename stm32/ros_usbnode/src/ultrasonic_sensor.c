@@ -73,7 +73,7 @@ void ULTRASONICSENSOR_ReceiveIT(void)
         ultrasonic_u32LeftDistance = (ultrasonic_pu8ReceivedData[5] << 8) + ultrasonic_pu8ReceivedData[6];
         ultrasonic_u32RightDistance  = (ultrasonic_pu8ReceivedData[7] << 8) + ultrasonic_pu8ReceivedData[8];
 
-        //DB_TRACE(" R: %dmm, L: %dmm \r\n",ultrasonic_u32RightDistance/10,ultrasonic_u32LeftDistance/10);
+        DB_TRACE(" R: %dmm, L: %dmm \r\n",ultrasonic_u32RightDistance/10,ultrasonic_u32LeftDistance/10);
         ultrasonic_RxFlag = 1;
     }
 }

@@ -42,6 +42,15 @@ uint8_t Emergency_State(void)
 }
 
 /**
+ * @brief Reset Emergency State bits
+ * @retval none
+ */
+void Emergency_ResetState(void)
+{
+    emergency_state = 0;
+}
+
+/**
  * @brief Poll mechanical Tilt Sensor
  * @retval 1 if tilt is detected, 0 if all is good
  */

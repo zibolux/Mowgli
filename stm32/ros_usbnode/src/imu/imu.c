@@ -287,7 +287,7 @@ void IMU_Calibrate()
     /***************************************************/
     /* load magnetometer calibration (hard/soft iron)  */
     /****************************************************/  
-    
+   /*
     external_imu_mag_bias[0] = SPIFLASH_ReadDouble("mag_bias_x");
     external_imu_mag_bias[1] = SPIFLASH_ReadDouble("mag_bias_y");
     external_imu_mag_bias[2] = SPIFLASH_ReadDouble("mag_bias_z");
@@ -309,7 +309,7 @@ void IMU_Calibrate()
     debug_printf("       [ %f\t%f\t%f\r\n", external_imu_mag_cal_matrix[0][0], external_imu_mag_cal_matrix[0][1], external_imu_mag_cal_matrix[0][2]); 
     debug_printf("         %f\t%f\t%f\r\n", external_imu_mag_cal_matrix[1][0], external_imu_mag_cal_matrix[1][1], external_imu_mag_cal_matrix[1][2]); 
     debug_printf("         %f\t%f\t%f ]\r\n", external_imu_mag_cal_matrix[2][0], external_imu_mag_cal_matrix[2][1], external_imu_mag_cal_matrix[2][2]);     
-    
+    */
 }
 
 

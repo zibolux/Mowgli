@@ -48,6 +48,7 @@ extern uint16_t  right_encoder_val;    // non accumulating
 extern uint16_t  left_encoder_val;     // non accumulating 
 extern uint8_t   right_power;
 extern uint8_t   left_power;
+extern uint32_t  DRIVEMOTOR_u32ErrorCnt;
 
 
 /******************************************************************************
