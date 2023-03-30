@@ -5,23 +5,11 @@
 
 ## About
 
-This repo tracks my progress in reverse engineering the Yardforce GForce mainbord as used in the Yardforce 500 (and others) Mower Robots.
+This repo is forked of https://github.com/cloudn1ne/Mowgli to folllow his great job.
+It should work on the classic one and the Luv1000ri
 
-Mowgli is compatible with [OpenMower](https://github.com/ClemensElflein/OpenMower) but without having to use that projects mainboard, instead recycling as much hardware as possible from the original GForce mainboard. 
-There should are no irreversible modifications to the GForce board required.
+Please change the different option in board.h
 
-## Looking for MowgliRover ?
-
-MowgliRover is the part of this project that needs to be deployed on the Raspi.
-
-see [here](https://github.com/cloudn1ne/MowgliRover)
-
-## Looking for MowgliBase ?
-
-MowgliBase is the repo that contains the IMU Magnetometer calibration tooling.
-It is meant to be deployed onto a Linux ROS Noetic installation.
-
-see [here](https://github.com/cloudn1ne/MowgliBase)
 
 ## Updates
 
@@ -60,13 +48,10 @@ The custom firmware has no protections - no tilt sensing, no stop buttons will w
 - onboard IMU (accelerometer) for tilt protection
 - Safety switches (Hall Sensors) for STOP button
 - Rain Sensor
-- **Mowgli is now compatible with the OpenMower software stack thanks to the [MowgliRover] Proxy software (https://github.com/cloudn1ne/MowgliRover)**
 
 ## TODO
 
-- Move all UART functions use DMA as HAL_IT is a seriously broken API
-- Publish Blade Motor state
-- LEDs should be controllable via a Topic or Service
+Do the correct topics to remove the mowgli proxy in openmower ros and so be plug & play with openmower.
 
 ## rosserial node
 
@@ -74,25 +59,22 @@ This is the software that needs to be compiled and flashed onto the STM32 on the
 
 - [See here how to use the ROS serial node](stm32/ros_usbnode)
 
-## Published Topics
-
-- /mowgli/status - Mowgli Status messages, simliar to Openmowers
-- /mowgli/odom - Mowgli ODOM (calculated onboard from wheel ticks)
-- /imu/data_raw - Mowgli IMU (the I2C attached one)
-- /imu_onboard/data_raw - Mowlgi (on YF Mainboard) IMU accelerometer only
-- /imu/mag_calibration - Mowgli IMU (the I2C attached on) - raw magnetometer data (uncalibrated)
-- /buttonstates - on supported panels
 
 ### in case a supported I2C IMU is connected to J18
 
-Currently only the [Pololu IMU 10v5](https://www.pololu.com/product/2739) is supported, but any I2C or SPI IMU should work.
+Currently  the [Pololu IMU 10v5](https://www.pololu.com/product/2739) and [WT901] are supported.
+Don't hesisate  to ask if you want use another IMU
+
+Check in board.h for the connected PIN, as I used PB3 for debug purposes, the pinning is different as the original repo.
+
+## Published Topics
 
 ## Services
 - /mowgli/MowerControlSrv - enabled/disable blade
 - /mowgli/GetCfg - read SPI flash config var
 - /mowgli/SetCfg - write SPI flash config var
 - /mowgli/Reboot - reboot Mowgli
-- /mowgli/EnableTF - enable odom_dr -> base_link_dr transform (for /mowgli/odom) - used for Dead Reckoning - default ON
+- /mowgli/ResetEmergency - Reset emergency state
 - /mowgli/SetLed - enable LED (1-17), if the MSB is set (128), the bot will chirp too
 - /mowgli/ClrLed - disabled LED (1-17), if the MSB is set (128), the bot will chirp too
 
