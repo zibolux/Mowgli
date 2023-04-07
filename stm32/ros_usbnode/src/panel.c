@@ -30,18 +30,13 @@ UART_HandleTypeDef PANEL_USART_Handler;
 DMA_HandleTypeDef hdma_uart1_rx;
 DMA_HandleTypeDef hdma_uart1_tx;
 
-uint16_t buttonstate[PANEL_BUTTON_BYTES];
+uint8_t buttonstate[PANEL_BUTTON_BYTES+2];
 uint8_t buttonupdated = 0; // 1 if buttonstate was updated by the panel
 uint8_t buttoncleared = 0;
 
 
 uint8_t Led_States[LED_STATE_SIZE];
 
-static uint8_t SendBuffer[256];
-static uint8_t ReceiveBuffer[256];
-static uint8_t ReceiveIndex = 0;
-static uint8_t ReceiveLength;
-static uint8_t ReceiveCRC;
 // static uint8_t Key_Pressed;
 static uint8_t Frame_Received_Panel = 0;
 /* per panel type initializers */
@@ -49,19 +44,20 @@ static uint8_t Frame_Received_Panel = 0;
     const uint8_t KEY_INIT_MSG[] = {0x03, 0x90, 0x28};     
 #elif PANEL_TYPE == PANEL_TYPE_YARDFORCE_500_CLASSIC
     const uint8_t KEY_INIT_MSG[] = {0x06, 0x50, 0xe0};       
-#elif PANEL_TYPE ==PANEL_TYPE_YARDFORCE_LUV1000RI
+#elif PANEL_TYPE == PANEL_TYPE_YARDFORCE_LUV1000RI
     const uint8_t KEY_INIT_MSG[] = {0x03, 0x99, 0x21};
 #else 
     #error "No panel type define in board.h"
 #endif
 
 const uint8_t KEY_ACTIVATE[] = {0x0, 0x0, 0x1};
-
-
 static uint8_t panel_pu8ReceivedData[50] = {0};
 static uint8_t panel_pu8RqstMessage[50]  = {0};
 
 const uint8_t panel_pcu8PreAmbule[5]  = {0x55,0xAA,0x0A,0x50,0x3C};
+
+static uint8_t panel_u8OldStateButtonStart = 0;
+static uint8_t panel_u8OldStateButtonHome = 0;
 
 void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command);
 
@@ -70,8 +66,21 @@ void PANEL_Send_Message(uint8_t *data, uint8_t dataLength, uint16_t command);
  */
 void PANEL_Init(void)
 {    
-#ifdef PANEL_USART_ENABLED
     GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    PLAY_BUTTON_GPIO_CLK_ENABLE();
+    GPIO_InitStruct.Pin = PLAY_BUTTON_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(PLAY_BUTTON_PORT, &GPIO_InitStruct);
+
+    HOME_BUTTON_GPIO_CLK_ENABLE();
+    GPIO_InitStruct.Pin = HOME_BUTTON_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(HOME_BUTTON_PORT, &GPIO_InitStruct);
+
+#ifdef PANEL_USART_ENABLED
 
     // enable port and usart clocks
     PANEL_USART_GPIO_CLK_ENABLE();
@@ -216,25 +225,10 @@ void PANEL_Tick(void)
 {   
      if (Frame_Received_Panel == 1)
      {
-            //debug_printf("%x %x %x | %x %x %x \r\n",ReceiveBuffer[2],ReceiveBuffer[3],ReceiveBuffer[4], ReceiveBuffer[5], ReceiveBuffer[6], ReceiveBuffer[7]);
-            /* if (ReceiveBuffer[5]==0x02) debug_printf("key: timer\r\n");
-            if (ReceiveBuffer[6]==0x02) debug_printf("key: S1\r\n");
-            if (ReceiveBuffer[7]==0x02) debug_printf("key: S2\r\n");
-            if (ReceiveBuffer[8]==0x02) debug_printf("key: Lock\r\n");
-            if (ReceiveBuffer[9]==0x02) debug_printf("key: OK\r\n");
-            if (ReceiveBuffer[10]==0x02) debug_printf("key: Mon\r\n");
-            if (ReceiveBuffer[11]==0x02) debug_printf("key: Tue\r\n");
-            if (ReceiveBuffer[12]==0x02) debug_printf("key: Wed\r\n");
-            if (ReceiveBuffer[13]==0x02) debug_printf("key: Thu\r\n");
-            if (ReceiveBuffer[14]==0x02) debug_printf("key: Fri\r\n");
-            if (ReceiveBuffer[15]==0x02) debug_printf("key: Sat\r\n");
-            if (ReceiveBuffer[16]==0x02) debug_printf("key: Sun\r\n");
-            */
             if ((panel_pu8ReceivedData[5]&0x1) == 0) // any button pressed
             {
                for(int button_byte=0;button_byte < PANEL_BUTTON_BYTES;button_byte++)
                 {
-               
                     buttonstate[button_byte] = panel_pu8ReceivedData[button_byte+5];//&0x3;
                     buttonupdated = 1;
                     buttoncleared = 0;
@@ -250,15 +244,25 @@ void PANEL_Tick(void)
                     }
                     buttonupdated = 1;
                     buttoncleared = 1;
-                }
+                }   
             }
     
       Frame_Received_Panel=0;
      }
-     
+    /* add Start and Home at the end the tab*/
+    buttonstate[PANEL_BUTTON_DEF_START] = !HAL_GPIO_ReadPin(PLAY_BUTTON_PORT, PLAY_BUTTON_PIN); // pullup, active low    
+    buttonstate[PANEL_BUTTON_DEF_HOME]  = !HAL_GPIO_ReadPin(HOME_BUTTON_PORT, HOME_BUTTON_PIN); // pullup, active low    
+    /* Click detected */
+    if( (buttonstate[PANEL_BUTTON_DEF_START] != panel_u8OldStateButtonStart) && buttonstate[PANEL_BUTTON_DEF_START]){
+        buttonupdated = 1;
+    }
 
-    // uncomment to flash charging led as a test
-    // PANEL_Set_LED(PANEL_LED_CHARGING, PANEL_LED_FLASH_FAST);
+    if( (buttonstate[PANEL_BUTTON_DEF_HOME] != panel_u8OldStateButtonHome) && buttonstate[PANEL_BUTTON_DEF_HOME]){
+        buttonupdated = 1;
+    }
+
+    panel_u8OldStateButtonStart = buttonstate[PANEL_BUTTON_DEF_START];
+    panel_u8OldStateButtonHome = buttonstate[PANEL_BUTTON_DEF_HOME];
     
 #ifdef PANEL_USART_ENABLED   
     PANEL_SendLEDMessage();

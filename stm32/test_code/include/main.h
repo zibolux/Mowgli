@@ -49,9 +49,6 @@ UART_HandleTypeDef BLADEMOTOR_USART_Handler; // UART  Handle
 
 I2C_HandleTypeDef I2C_Handle;
 
-ADC_HandleTypeDef ADC_Handle;
-
-TIM_HandleTypeDef TIM1_Handle;
 
 
 /* USER CODE END EC */

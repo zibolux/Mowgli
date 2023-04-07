@@ -42,8 +42,8 @@ extern "C" {
 
 extern int16_t   right_wheel_speed_val;
 extern int16_t   left_wheel_speed_val;
-extern int32_t   right_encoder_ticks;  // accumulating
-extern int32_t   left_encoder_ticks;   // accumulating 
+extern uint32_t   right_encoder_ticks;  // accumulating
+extern uint32_t   left_encoder_ticks;   // accumulating 
 extern uint16_t  right_encoder_val;    // non accumulating 
 extern uint16_t  left_encoder_val;     // non accumulating 
 extern uint8_t   right_power;

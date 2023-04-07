@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+void SPI3_Init(void);
+void SPI3_DeInit(void);
 
 void SPIFLASH_Config(void);
 void SPIFLASH_IncBootCounter(void);

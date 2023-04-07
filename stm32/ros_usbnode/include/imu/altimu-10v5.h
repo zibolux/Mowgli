@@ -2,6 +2,7 @@
 #ifndef __ALTIMU_10V5_H
 #define __ALTIMU_10V5_H
 
+#ifdef IMU_ALTIMU
 /* Calibration, Conversion factors */
 
 #define DS33_G_FACTOR           1.0/(65536/2/2)     // LSM6DS33 datasheet (page 15)  0.061 mg/LSB
@@ -128,5 +129,7 @@
 #define LPS25H_INT_SOURCE          0x25
 #define LPS25H_THS_P_L             0x30
 #define LPS25H_THS_P_H             0x31
+
+#endif
 
 #endif /* __ALTIMU_10V5_H */

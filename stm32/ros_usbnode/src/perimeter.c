@@ -16,6 +16,7 @@
 #include "main.h"
 #include "perimeter.h" 
 #include <math.h>
+#include <stdlib.h>
 
 
 /******************************************************************************
@@ -149,7 +150,7 @@ void Perimeter_vApp(void){
       u16_zeroADCraw = (uint16_t)sum;
     }
     else{
-      mag[idxCoil] = corrFilter(sigcode,1,sizeof(sigcode)/4,&(pu16_PerimeterADC_buffer[0]),PERIMETER_NBPTS-(sizeof(sigcode)/4),&quality);
+      mag[idxCoil] = corrFilter(sigcode,1,sizeof(sigcode)/4,&(pu16_PerimeterADC_buffer[0]),PERIMETER_NBPTS-(sizeof(sigcode)/4),&(quality[idxCoil]));
       smoothMag[idxCoil] = 0.99 * smoothMag[idxCoil] + 0.01 * ((float)abs(mag[idxCoil]));
     }
 

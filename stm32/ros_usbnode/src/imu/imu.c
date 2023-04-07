@@ -13,9 +13,9 @@
   */
 
 #include <math.h>
-
+#include "board.h"
 #include "imu/imu.h"
-//#include "imu/altimu-10v5.h"
+#include "imu/altimu-10v5.h"
 #include "imu/wt901.h"
 #include "i2c.h"
 #include "main.h"

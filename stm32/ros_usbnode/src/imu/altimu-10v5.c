@@ -17,6 +17,9 @@
   ******************************************************************************
   */
 
+#include "board.h"
+#ifdef IMU_ALTIMU
+
 #include "imu/imu.h"
 #include "imu/altimu-10v5.h"
 #include "soft_i2c.h"
@@ -239,3 +242,4 @@ float IMU_ReadBarometerAltitudeMeters(void)
 {
     return (1 - pow((float)IMU_ReadBarometerPressureMilliBars() / 1013.25, 0.190263)) * 44330.8;
 }
+#endif

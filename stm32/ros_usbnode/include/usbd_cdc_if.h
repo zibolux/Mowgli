@@ -52,7 +52,7 @@
 /* Define size for the receive and transmit buffer over CDC */
 /* Powers of 2 are a good choice so that modulo operations become faster mask operations */
 /* If you overwrite the CDC_DataReceivedHandler and always process the data, APP_RX_DATA_SIZE should be set to 0 to save RAM */
-#define APP_RX_DATA_SIZE  0
+#define APP_RX_DATA_SIZE  1024
 #define APP_TX_DATA_SIZE  8192
 #define CDC_RX_DATA_HANDLED 1
 #define CDC_RX_DATA_NOTHANDLED 0

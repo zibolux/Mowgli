@@ -31,10 +31,78 @@ uint8_t lfs_prog_buf[256];
 uint8_t lfs_lookahead_buf[16];	// 128/8=16
 uint8_t lfs_file_buf[256];
 
+// SPI3 FLASH
+SPI_HandleTypeDef SPI3_Handle;
+
 
 /*********************************************************************************************************
  * SPI Flash Driver for 25D40/20 SPI Flash
  *********************************************************************************************************/
+/**
+ * @brief SPI3 Bus (onboard FLASH)
+ * @retval None
+ */
+void SPI3_Init()
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    
+    // Disable JTAG only to free PA15, PB3* and PB4. SWD remains active
+    RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
+    __HAL_AFIO_REMAP_SWJ_NOJTAG();
+
+    __HAL_RCC_SPI3_CLK_ENABLE();
+    FLASH_SPI_CLK_ENABLE();
+    FLASH_SPICS_CLK_ENABLE();
+
+    GPIO_InitStruct.Pin = FLASH_CLK_PIN | FLASH_MOSI_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(FLASH_SPI_PORT, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = FLASH_MISO_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(FLASH_SPI_PORT, &GPIO_InitStruct);
+  
+    GPIO_InitStruct.Pin = FLASH_nCS_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(FLASH_SPICS_PORT, &GPIO_InitStruct);
+ 
+    // now init HAL SPI3_Handle
+    SPI3_Handle.Instance = SPI3;
+    SPI3_Handle.Init.Mode = SPI_MODE_MASTER;
+    SPI3_Handle.Init.Direction = SPI_DIRECTION_2LINES;
+    SPI3_Handle.Init.DataSize = SPI_DATASIZE_8BIT;
+    SPI3_Handle.Init.CLKPolarity = SPI_POLARITY_LOW;
+    SPI3_Handle.Init.CLKPhase = SPI_PHASE_1EDGE;
+    SPI3_Handle.Init.NSS = SPI_NSS_HARD_OUTPUT;
+    SPI3_Handle.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+    SPI3_Handle.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    SPI3_Handle.Init.TIMode = SPI_TIMODE_DISABLE;
+    SPI3_Handle.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+    SPI3_Handle.Init.CRCPolynomial = 10;
+    if (HAL_SPI_Init(&SPI3_Handle) != HAL_OK)
+    {
+        Error_Handler();
+    }    
+}
+
+/**
+ * @brief Deinit SPI3 Bus (onboard FLASH)
+ * @retval None
+ */
+void SPI3_DeInit()
+{        
+    __HAL_RCC_SPI3_CLK_DISABLE();
+    
+    HAL_GPIO_DeInit(FLASH_SPI_PORT,FLASH_CLK_PIN | FLASH_MISO_PIN | FLASH_nCS_PIN);
+    HAL_GPIO_DeInit(FLASH_SPICS_PORT,FLASH_nCS_PIN);
+
+   // reactivate JTAG
+   __HAL_AFIO_REMAP_SWJ_ENABLE();
+}
 
 uint8_t FLASH25D_Busy(void)
 {

@@ -10,15 +10,20 @@
 *  \brief 
 *
 */
+
+#include "board.h"
+#if defined(IMU_WT901)
+
 /******************************************************************************
 * Includes
 *******************************************************************************/
 #include "main.h"
 #include "board.h"
+#include "soft_i2c.h"
 
 #include "imu/imu.h"
 #include "imu/wt901.h"
-
+#include <math.h>
 
 /******************************************************************************
 * Module Preprocessor Constants
@@ -223,5 +228,4 @@ float IMU_TempRaw(void)
     return(retval);    
 }
 
-
-
+#endif

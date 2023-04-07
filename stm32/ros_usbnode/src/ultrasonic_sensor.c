@@ -80,7 +80,7 @@ void ULTRASONICSENSOR_ReceiveIT(void)
 
 uint32_t ULTRASONIC_MessageReceived(void){
     if(ultrasonic_RxFlag == 1){
-        ultrasonic_RxFlag = 0; /* rest flags*/
+        ultrasonic_RxFlag = 0; /* reset flags*/
         return 1;
     }
     else{

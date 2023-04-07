@@ -42,13 +42,14 @@ uint8_t Emergency_State(void)
 }
 
 /**
- * @brief Reset Emergency State bits
+ * @brief Set Emergency State bits
  * @retval none
  */
-void Emergency_ResetState(void)
+void  Emergency_SetState(uint8_t new_emergency_state)
 {
-    emergency_state = 0;
+    emergency_state = new_emergency_state;
 }
+
 
 /**
  * @brief Poll mechanical Tilt Sensor
@@ -276,9 +277,4 @@ void Emergency_Init(void)
     GPIO_InitStruct.Pull = GPIO_PULLDOWN;
     HAL_GPIO_Init(WHEEL_LIFT_RED_PORT, &GPIO_InitStruct);
 
-    PLAY_BUTTON_GPIO_CLK_ENABLE();
-    GPIO_InitStruct.Pin = PLAY_BUTTON_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    HAL_GPIO_Init(PLAY_BUTTON_PORT, &GPIO_InitStruct);
 }

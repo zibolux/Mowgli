@@ -48,7 +48,6 @@
 #define SW_I2C1_SDA_PIN   SOFT_I2C_SDA_PIN
 
 
-
 void  __attribute__ ((optimize(0))) TIMER__Wait_us (uint32_t nCount) 
 {
     for (; nCount != 0;nCount--);
@@ -57,12 +56,17 @@ void  __attribute__ ((optimize(0))) TIMER__Wait_us (uint32_t nCount)
 /* init soft i2c pins */
 void SW_I2C_Init(void)
 {
-    
     /* PB3, PB4 are used by the JTAG - we need to disable it, as we use SWD anyhow we dont need it */
     RCC->APB2ENR |= RCC_APB2ENR_AFIOEN; // Enable A.F. clock
-    AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_NOJNTRST; // JTAG is disabled, SWD is enabled
 
-
+    if( (SW_I2C1_SDA_PIN == GPIO_PIN_3) || (SW_I2C1_SCL_PIN == GPIO_PIN_3)){
+        AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_JTAGDISABLE; // JTAG is disabled, SW0 is enabled
+    }
+    else
+    {
+        AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_NOJNTRST; // JTAG is disabled
+    }
+    
     SOFT_I2C_GPIO_CLK_ENABLE();
 
     GPIO_InitTypeDef GPIO_InitStruct;
@@ -89,34 +93,24 @@ void SW_I2C_DeInit(void)
 // SDA High
 void sda_high(void)
 { 
-    //debug_printf("sda_1\r\n");
-    // GPIO_SetBits(SW_I2C1_SDA_GPIO, SW_I2C1_SDA_PIN);    
     HAL_GPIO_WritePin(SW_I2C1_SDA_GPIO, SW_I2C1_SDA_PIN, GPIO_PIN_SET);
-    //  HAL_GPIO_WritePin(GPIOB,  GPIO_PIN_3 , 1);
 }
 
 // SDA low
 void sda_low(void)
 {
-    //debug_printf("sda_0\r\n");
-    // GPIO_ResetBits(SW_I2C1_SDA_GPIO, SW_I2C1_SDA_PIN);  
     HAL_GPIO_WritePin(SW_I2C1_SDA_GPIO, SW_I2C1_SDA_PIN, GPIO_PIN_RESET);
-    //HAL_GPIO_WritePin(GPIOB,  GPIO_PIN_3 , 0);
 }
 
 // SCL High
 void scl_high(void)
 {   
-    //debug_printf("scl_1\r\n"); 
-    // GPIO_SetBits(SW_I2C1_SCL_GPIO, SW_I2C1_SCL_PIN);  
     HAL_GPIO_WritePin(SW_I2C1_SCL_GPIO, SW_I2C1_SCL_PIN, GPIO_PIN_SET);
 }
 
 // SCL low
 void scl_low(void)
 {    
-    //debug_printf("scl_0\r\n");
-    // GPIO_ResetBits(SW_I2C1_SCL_GPIO, SW_I2C1_SCL_PIN);
     HAL_GPIO_WritePin(SW_I2C1_SCL_GPIO, SW_I2C1_SCL_PIN, GPIO_PIN_RESET);
 }
 

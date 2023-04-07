@@ -29,8 +29,52 @@ typedef struct
  * IMU functions that a compatible IMU needs to be able to provide
  */
 
-uint8_t IMU_TestDevice(void);           // test of existence of IMU and if possible functioning 
-void IMU_Init(void);                    // initialize IMU (make settings, ready to fetch readings
+
+
+
+/******************************************************************************
+* PUBLIC Function Prototypes
+*******************************************************************************/
+/**
+  * @brief  Test Device 
+  * Perform any tests possible before actually enabling and using the device,
+  * for example check the i2c address and whoami registers if existing  
+  *
+  * @retval          0 -> test failed 1-> test ok, good to init and use
+  *
+  */
+uint8_t IMU_TestDevice(void);
+
+/**
+  * @brief  Initialize IMU
+  *  
+  */
+void IMU_Init(void);
+
+/**
+  * @brief  Reads the 3 accelerometer channels and stores them in *x,*y,*z
+  * units are m/s^2
+  */
+void IMU_ReadAccelerometerRaw(float *x, float *y, float *z);
+
+/**
+  * @brief  Reads the 3 gyro channels and stores them in *x,*y,*z
+  * units are rad/sec
+  */
+void IMU_ReadGyroRaw(float *x, float *y, float *z);
+
+/**
+  * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
+  * units are tesla uncalibrated
+  */
+void IMU_ReadMagnetometerRaw(double *x, double *y, double *z);
+
+/**
+  * @brief  Reads the raw temp value
+  * (internal function only)
+  * @retval float temp in °C
+  */
+float IMU_TempRaw(void);
 
 void IMU_ReadAccelerometer(float *x, float *y, float *z);
 void IMU_Onboard_ReadAccelerometer(float *x, float *y, float *z);
@@ -48,11 +92,6 @@ void IMU_Normalize( VECTOR* p );
 float IMU_MagHeading(void);
 
 
-
-/* Any external IMU needs to implement the following functions and adhere to the ROS REP 103 standard (https://www.ros.org/reps/rep-0103.html) */
-void IMU_ReadGyroRaw(float *x, float *y, float *z);
-void IMU_ReadAccelerometerRaw(float *x, float *y, float *z);
-void IMU_ReadMagnetometerRaw(double *x, double *y, double *z);
 /* end of functions to implement for IMU */
 
 

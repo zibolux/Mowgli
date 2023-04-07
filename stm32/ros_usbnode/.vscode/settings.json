@@ -15,6 +15,8 @@
         "string_view": "c",
         "cmath": "cpp",
         "*.tcc": "c",
-        "stdbool.h": "c"
-    }
+        "stdbool.h": "c",
+        "main.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

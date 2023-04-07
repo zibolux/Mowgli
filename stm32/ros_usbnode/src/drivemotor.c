@@ -14,7 +14,7 @@
 * Includes
 *******************************************************************************/
 #include <string.h>
-
+#include <stdlib.h>
 #include "stm32f1xx_hal.h"
 #include "stm32f1xx_hal_uart.h"
 
@@ -91,8 +91,8 @@ uint16_t prev_right_encoder_val = 0;
 uint16_t prev_left_encoder_val = 0;
 int16_t prev_right_wheel_speed_val = 0;
 int16_t prev_left_wheel_speed_val = 0;
-int32_t right_encoder_ticks = 0;
-int32_t left_encoder_ticks = 0;
+uint32_t right_encoder_ticks = 0;
+uint32_t left_encoder_ticks = 0;
 int8_t left_direction = 0;
 int8_t right_direction = 0;
 uint16_t right_encoder_val = 0;
@@ -346,7 +346,7 @@ void DRIVEMOTOR_App_Rx(void){
             {
                 prev_left_encoder_val = 0;
             }
-            left_encoder_ticks +=  abs(left_direction)* (left_encoder_val - prev_left_encoder_val);
+            left_encoder_ticks +=  abs(left_direction* (left_encoder_val - prev_left_encoder_val));
             prev_left_encoder_val = left_encoder_val;
             prev_left_wheel_speed_val = left_wheel_speed_val;
             prev_left_direction = left_direction;
@@ -356,7 +356,7 @@ void DRIVEMOTOR_App_Rx(void){
             {
                 prev_right_encoder_val = 0;
             }
-            right_encoder_ticks +=  abs(right_direction)*(right_encoder_val - prev_right_encoder_val);
+            right_encoder_ticks +=  abs(right_direction*(right_encoder_val - prev_right_encoder_val));
             prev_right_encoder_val = right_encoder_val;
             prev_right_wheel_speed_val = right_wheel_speed_val;
             prev_right_direction = right_direction;
