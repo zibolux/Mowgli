@@ -137,8 +137,10 @@ xbot_msgs::WheelTick wheel_ticks_msg;
  */
 ros::Publisher pubButtonState("buttonstate", &buttonstate_msg);
 ros::Publisher pubOMStatus("mower/status", &om_mower_status_msg);
-ros::Publisher pubStatus("mowgli/status", &status_msg);
 ros::Publisher pubWheelTicks("/mower/wheel_ticks", &wheel_ticks_msg);
+#ifdef ROS_PUBLISH_MOWGLI
+ros::Publisher pubStatus("mowgli/status", &status_msg);
+#endif
 
 // IMU external
 ros::Publisher pubIMU("imu/data_raw", &imu_msg);
@@ -341,7 +343,7 @@ extern "C" void panel_handler()
 			if (buttonstate[PANEL_BUTTON_DEF_HOME]) {
 				highControlRequest.command = mower_msgs::HighLevelControlSrvRequest::COMMAND_HOME;
 			}
-			//svcHighLevelControl.call(highControlRequest, highControlResponse);
+			svcHighLevelControl.call(highControlRequest, highControlResponse);
 			buttonupdated=0;
 		}
 	}
@@ -444,6 +446,7 @@ extern "C" void broadcast_handler()
 
 	if (NBT_handler(&status_nbt))
 	{
+#ifdef ROS_PUBLISH_MOWGLI
 		////////////////////////////////////////
 		// mowgli/status Message
 		////////////////////////////////////////
@@ -478,6 +481,7 @@ extern "C" void broadcast_handler()
 		status_msg.sw_ver_bra = MOWGLI_SW_VERSION_BRANCH;
 		status_msg.sw_ver_min = MOWGLI_SW_VERSION_MINOR;
 		pubStatus.publish(&status_msg);
+#endif
 
 		om_mower_status_msg.stamp = nh.now();
 		om_mower_status_msg.mower_status = mower_msgs::Status::MOWER_STATUS_OK;
@@ -680,7 +684,9 @@ extern "C" void init_ROS()
 
 	nh.advertise(pubButtonState);
 	nh.advertise(pubIMU);
+#ifdef ROS_PUBLISH_MOWGLI
 	nh.advertise(pubStatus);
+#endif
 	nh.advertise(pubOMStatus);
 	nh.advertise(pubWheelTicks);
 
@@ -693,7 +699,7 @@ extern "C" void init_ROS()
 	nh.advertiseService(svcEnableMowerMotor);
 	nh.advertiseService(svcSetEmergency);
 	nh.advertiseService(svcReboot);
-	//nh.serviceClient(svcHighLevelControl);
+	nh.serviceClient(svcHighLevelControl);
 
 	// Initialize Timers
 	NBT_init(&publish_nbt, 1000);

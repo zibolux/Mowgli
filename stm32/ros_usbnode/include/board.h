@@ -29,6 +29,9 @@ extern "C"
 #define DEBUG_TYPE_UART 1
 #define DEBUG_TYPE_SWO 2
 
+/* Publish Mowgli Topics */
+//#define ROS_PUBLISH_MOWGLI
+
 /* different type of panel are possible */
 #define PANEL_TYPE_NONE 0
 #define PANEL_TYPE_YARDFORCE_500_CLASSIC 1
@@ -249,7 +252,7 @@ extern "C"
 
 // J18 has the SPI3 pins, as we dont use SPI3, we recycle them for I2C Bitbanging (for our Pololu ALtIMU-10v5)
 #ifdef SOFT_I2C_ENABLED
-#define SOFT_I2C_SCL_PIN GPIO_PIN_5
+#define SOFT_I2C_SCL_PIN GPIO_PIN_3
 #define SOFT_I2C_SCL_PORT GPIOB
 #define SOFT_I2C_SDA_PIN GPIO_PIN_4
 #define SOFT_I2C_SDA_PORT GPIOB
