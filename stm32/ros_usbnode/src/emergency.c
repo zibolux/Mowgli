@@ -159,7 +159,7 @@ void EmergencyController(void)
         stop_emergency_started = 0;
     }
 
-    if (wheel_lift_blue || wheel_lift_red)
+    if (wheel_lift_blue && wheel_lift_red)
     {
         if (wheel_lift_emergency_started == 0)
         {
