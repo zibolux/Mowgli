@@ -131,6 +131,7 @@ mowgli::status status_msg;
 // om status message
 mower_msgs::Status om_mower_status_msg;
 xbot_msgs::WheelTick wheel_ticks_msg;
+mower_msgs::HighLevelStatus high_level_status;
 
 /*
  * PUBLISHERS
@@ -194,10 +195,23 @@ static bool reboot_flag = false;
 
 
 extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatus& msg){
+	high_level_status = msg;
 	if (msg.gps_quality_percent < 0.9) {
-		PANEL_Set_LED(PANEL_LED_GPS, PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_LOCK, PANEL_LED_OFF);
 	} else {
-		PANEL_Set_LED(PANEL_LED_GPS, PANEL_LED_ON);
+		PANEL_Set_LED(PANEL_LED_LOCK, PANEL_LED_ON);
+	}
+	switch (high_level_status.state) {
+		case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS:
+			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_ON);
+		break;
+		default:
+			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_OFF);
+	}
+	if (blade_on_off) {
+			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_ON);
+	} else {
+			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_OFF);
 	}
 }
 /*
@@ -302,11 +316,15 @@ extern "C" void motors_handler()
 				DRIVEMOTOR_SetSpeed(left_speed, right_speed, left_dir, right_dir);
 			}
 
-			if ( last_cmd_vel_age > 25)
+			if ( last_cmd_vel_age > 35 && BLADEMOTOR_bActivated) //Blade can take up to 10 seconds to switch on
 			{
+				BLADEMOTOR_Set(0);
+			} else if (last_cmd_vel_age > 60 && high_level_status.state != mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS) {
 				blade_on_off = 0;
+				BLADEMOTOR_Set(blade_on_off);
+			} else {
+				BLADEMOTOR_Set(blade_on_off);
 			}
-			BLADEMOTOR_Set(blade_on_off);
 		}
 	}
 }
@@ -692,6 +710,7 @@ extern "C" void init_ROS()
 
 	// Initialize Subscribers
 	nh.subscribe(subCommandVelocity);
+	nh.subscribe(subCommandHighLevelStatus);
 
 	// Initialize Services
 	//nh.advertiseService(svcSetCfg);
