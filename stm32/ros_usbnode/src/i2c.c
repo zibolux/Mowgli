@@ -49,7 +49,7 @@ void I2C_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   I2C_Handle.Instance = I2C1;
-  I2C_Handle.Init.ClockSpeed = 200000;
+  I2C_Handle.Init.ClockSpeed = 400000;
   I2C_Handle.Init.DutyCycle = I2C_DUTYCYCLE_2;
   I2C_Handle.Init.OwnAddress1 = 0;
   I2C_Handle.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
