@@ -205,17 +205,17 @@ void ChargeController(void)
 
     case CHARGER_STATE_CHARGING_CV:
         // set PWM to approach 29.4V  charge voltage
-        if ((charge_voltage < (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val < 1350))
+        if ((battery_voltage < BAT_CHARGE_CUTOFF_VOLTAGE) && (charge_voltage < (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val < 1350))
         {
           chargecontrol_pwm_val++;
         }            
-        if ((charge_voltage > (MAX_CHARGE_VOLTAGE)) && (chargecontrol_pwm_val > 50))
+        if ((chargecontrol_pwm_val > 50) && ((battery_voltage > BAT_CHARGE_CUTOFF_VOLTAGE) || (charge_voltage > (MAX_CHARGE_VOLTAGE))))
         {
           chargecontrol_pwm_val--;
         }
 
         /* the current is limited to 150ma */
-        if ((current > (MAX_CHARGE_CURRENT/10)))
+        if ((current > (MAX_CHARGE_CURRENT/10)) && chargecontrol_pwm_val > 0)
         {
             chargecontrol_pwm_val--;
         }
