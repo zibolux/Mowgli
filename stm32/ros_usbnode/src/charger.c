@@ -209,7 +209,7 @@ void ChargeController(void)
         {
           chargecontrol_pwm_val++;
         }            
-        if ((chargecontrol_pwm_val > 50) && ((battery_voltage > BAT_CHARGE_CUTOFF_VOLTAGE) || (charge_voltage > (MAX_CHARGE_VOLTAGE))))
+        if ((battery_voltage > BAT_CHARGE_CUTOFF_VOLTAGE && (chargecontrol_pwm_val > 0)) || (charge_voltage > (MAX_CHARGE_VOLTAGE) && (chargecontrol_pwm_val > 50)))
         {
           chargecontrol_pwm_val--;
         }
