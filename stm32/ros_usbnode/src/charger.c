@@ -222,7 +222,7 @@ void ChargeController(void)
 
         /* battery full ? */
         if (current < CHARGE_END_LIMIT_CURRENT) {
-          charger_state = CHARGER_STATE_END_CHARGING;
+          //charger_state = CHARGER_STATE_END_CHARGING;
           /*consider as the battery full */
           ampere_acc.f = 2.8;
           SOC = 100;
