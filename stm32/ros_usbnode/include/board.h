@@ -70,7 +70,7 @@ extern "C"
 /// Max voltage allowed 29.4
 #define MAX_CHARGE_VOLTAGE 29.0f
 /// Max battery voltage allowed
-#define BAT_CHARGE_CUTOFF_VOLTAGE 28.8f
+#define BAT_CHARGE_CUTOFF_VOLTAGE 27.0f
 /// We consider the battery is full when in CV mode the current below 0.1A
 #define CHARGE_END_LIMIT_CURRENT 0.08f
 // if voltage is greater than this assume we are docked
