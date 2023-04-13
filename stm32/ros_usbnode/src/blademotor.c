@@ -202,7 +202,7 @@ void BLADEMOTOR_Set(uint8_t on_off)
 void BLADEMOTOR_ReceiveIT(void)
 {
     /* decode the frame */    
-    if(memcmp(blademotor_pcu8Preamble, blademotor_pu8ReceivedData, 5) == 0){        
+    if(memcmp(blademotor_pcu8Preamble, blademotor_pu8ReceivedData, 2) == 0){        
         uint8_t l_u8crc = crcCalc(blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG-1);
 
         if(blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG-1] == l_u8crc ){

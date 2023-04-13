@@ -209,7 +209,11 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_OFF);
 	}
 	if (blade_on_off) {
+		if (BLADEMOTOR_bActivated) {
+			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_FLASH_SLOW);
+		} else {
 			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_ON);
+		}
 	} else {
 			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_OFF);
 	}
