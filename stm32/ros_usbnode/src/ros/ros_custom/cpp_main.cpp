@@ -316,7 +316,7 @@ extern "C" void motors_handler()
 				DRIVEMOTOR_SetSpeed(left_speed, right_speed, left_dir, right_dir);
 			}
 
-			if ( last_cmd_vel_age > 35 && BLADEMOTOR_bActivated) //Blade can take up to 10 seconds to switch on
+			if ( last_cmd_vel_age > 35) //Blade can take up to 10 seconds to switch on
 			{
 				BLADEMOTOR_Set(0);
 			} else if (last_cmd_vel_age > 60 && high_level_status.state != mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS) {
