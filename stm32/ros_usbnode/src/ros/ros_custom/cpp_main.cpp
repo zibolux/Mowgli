@@ -67,15 +67,6 @@
 #include "mower_msgs/HighLevelControlSrv.h"
 #include "mower_msgs/HighLevelStatus.h"
 
-#define MAX_MPS 0.5		  // Allow maximum speed of 0.5 m/s
-#define PWM_PER_MPS 300.0 // PWM value of 300 means 1 m/s bot speed
-
-#define TICKS_PER_M 300.0 // Motor Encoder ticks per meter
-
-// #define WHEEL_BASE  0.325		// The distance between the center of the wheels in meters
-#define WHEEL_BASE 0.285   // The distance between the center of the wheels in meters
-#define WHEEL_DIAMETER 0.2 // The diameter of the wheels in meters
-
 #define ODOM_NBT_TIME_MS 100
 #define IMU_NBT_TIME_MS 20
 #define MOTORS_NBT_TIME_MS 20
@@ -320,12 +311,12 @@ extern "C" void motors_handler()
 				DRIVEMOTOR_SetSpeed(left_speed, right_speed, left_dir, right_dir);
 			}
 
-			if ( last_cmd_vel_age > 35) //Blade can take up to 10 seconds to switch on
+			if (last_cmd_vel_age > 50 && high_level_status.state != mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS) //Blade can take up to 10 seconds to switch on
 			{
-				BLADEMOTOR_Set(0);
-			} else if (last_cmd_vel_age > 60 && high_level_status.state != mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS) {
 				blade_on_off = 0;
 				BLADEMOTOR_Set(blade_on_off);
+			} else if (last_cmd_vel_age > 25) {
+				BLADEMOTOR_Set(0);
 			} else {
 				BLADEMOTOR_Set(blade_on_off);
 			}

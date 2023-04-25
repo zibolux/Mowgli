@@ -173,6 +173,14 @@ void  BLADEMOTOR_App(void){
 
         /* prepare to receive the message before to launch the command */        
         HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler, blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG);
+        if(blademotor_pu8ReceivedData[6] != 0){
+            debug_printf(" * Blade Motor Error\r\n");     
+            bool on_off = blademotor_pu8RqstMessage[5] == 0x80;
+            BLADEMOTOR_Set(0);
+            HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);    
+            HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler, blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG);
+            BLADEMOTOR_Set(on_off);
+        }            
         HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);    
         break;
     
