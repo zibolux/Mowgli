@@ -43,8 +43,8 @@ extern "C"
 #define BLADEMOTOR_LENGTH_RECEIVED_MSG 16
 #define DEBUG_TYPE DEBUG_TYPE_UART
 
-#define MAX_MPS 1.0		  // Allow maximum speed of 1.0 m/s
-#define PWM_PER_MPS 150.0 // PWM value of 300 means 1 m/s bot speed so we divide by 4 to have correct robot speed but still progressive speed
+#define MAX_MPS 0.5		  // Allow maximum speed of 1.0 m/s
+#define PWM_PER_MPS 300.0 // PWM value of 300 means 1 m/s bot speed so we divide by 4 to have correct robot speed but still progressive speed
 #define TICKS_PER_M 300.0 // Motor Encoder ticks per meter
 #define WHEEL_BASE  0.285		// The distance between the center of the wheels in meters
 
@@ -59,8 +59,8 @@ extern "C"
 #define OPTION_ULTRASONIC 1
 #define OPTION_BUMPER 0
 
-#define MAX_MPS 1.0		  // Allow maximum speed of 1.0 m/s
-#define PWM_PER_MPS 150.0 // PWM value of 300 means 1 m/s bot speed so we divide by 4 to have correct robot speed but still progressive speed
+#define MAX_MPS 0.5		  // Allow maximum speed of 1.0 m/s
+#define PWM_PER_MPS 300.0 // PWM value of 300 means 1 m/s bot speed so we divide by 4 to have correct robot speed but still progressive speed
 #define TICKS_PER_M 300.0 // Motor Encoder ticks per meter
 #define WHEEL_BASE 0.285   // The distance between the center of the wheels in meters
 

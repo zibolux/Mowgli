@@ -311,15 +311,11 @@ extern "C" void motors_handler()
 				DRIVEMOTOR_SetSpeed(left_speed, right_speed, left_dir, right_dir);
 			}
 
-			if (last_cmd_vel_age > 50 && high_level_status.state != mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS) //Blade can take up to 10 seconds to switch on
+			if (last_cmd_vel_age > 25) //Blade can take up to 10 seconds to switch on
 			{
 				blade_on_off = 0;
-				BLADEMOTOR_Set(blade_on_off);
-			} else if (last_cmd_vel_age > 25) {
-				BLADEMOTOR_Set(0);
-			} else {
-				BLADEMOTOR_Set(blade_on_off);
 			}
+			BLADEMOTOR_Set(blade_on_off);
 		}
 	}
 }
@@ -621,8 +617,11 @@ void cbSetCfg(const mowgli::SetCfgRequest &req, mowgli::SetCfgResponse &res)
  */
 void cbEnableMowerMotor(const mower_msgs::MowerControlSrvRequest &req, mower_msgs::MowerControlSrvResponse &res)
 {
-	blade_on_off = req.mow_enabled;
-
+	if (req.mow_enabled && !Emergency_State()) {
+        blade_on_off = 1;
+    } else {
+        blade_on_off = 0;
+    }
 }
 
 /*
