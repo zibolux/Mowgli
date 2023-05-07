@@ -26,9 +26,7 @@
 
 static uint8_t emergency_state = 0;
 static uint32_t stop_emergency_started = 0;
-static uint32_t blue_wheel_lift_emergency_started = 0;
-static uint32_t red_wheel_lift_emergency_started = 0;
-static uint32_t both_wheels_lift_emergency_started = 0;
+static uint32_t wheel_lift_emergency_started = 0;
 static uint32_t tilt_emergency_started = 0;
 static uint32_t accelerometer_int_emergency_started = 0;
 static uint32_t play_button_started = 0;
@@ -163,47 +161,27 @@ void EmergencyController(void)
 
     if (wheel_lift_blue && wheel_lift_red)
     {
-        if (both_wheels_lift_emergency_started==0)
+        if (wheel_lift_emergency_started == 0)
         {
-            both_wheels_lift_emergency_started=now;
+            wheel_lift_emergency_started = now;
         }
-        else if (now-both_wheels_lift_emergency_started>=BOTH_WHEELS_LIFT_EMERGENCY_MILLIS)
+        else
         {
-            emergency_state |= 0b11000;
-            debug_printf(" ## EMERGENCY ## - WHEEL LIFT (red and blue) triggered\r\n");
+            if (now - wheel_lift_emergency_started >= WHEEL_LIFT_EMERGENCY_MILLIS)
+            {
+                if (wheel_lift_blue)
+                {
+                    emergency_state |= 0b01000;
+                    debug_printf(" ## EMERGENCY ## - WHEEL LIFT (blue) triggered\r\n");
+                }
+                if (wheel_lift_red)
+                {
+                    emergency_state |= 0b10000;
+                    debug_printf(" ## EMERGENCY ## - WHEEL LIFT (red) triggered\r\n");
+                }
+            }
         }
-    } else {
-        both_wheels_lift_emergency_started=0;
     }
-    if (wheel_lift_blue)
-    {
-        if (blue_wheel_lift_emergency_started==0)
-        {
-            blue_wheel_lift_emergency_started=now;
-        }
-        else if (now-blue_wheel_lift_emergency_started>=ONE_WHEEL_LIFT_EMERGENCY_MILLIS)
-        {
-            emergency_state |= 0b01000;
-            debug_printf(" ## EMERGENCY ## - WHEEL LIFT (blue) triggered\r\n");
-        }
-    } else {
-        blue_wheel_lift_emergency_started=0;
-    }
-    if (wheel_lift_red)
-    {
-        if (red_wheel_lift_emergency_started==0)
-        {
-            red_wheel_lift_emergency_started=now;
-        }
-        else if (now-red_wheel_lift_emergency_started>=ONE_WHEEL_LIFT_EMERGENCY_MILLIS)
-        {
-            emergency_state |= 0b01000;
-            debug_printf(" ## EMERGENCY ## - WHEEL LIFT (red) triggered\r\n");
-        }
-    } else {
-        red_wheel_lift_emergency_started=0;
-    }
-
     if (accelerometer_int_triggered)
     {
         if(accelerometer_int_emergency_started == 0)
