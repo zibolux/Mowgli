@@ -2,6 +2,7 @@
 #ifndef __ALTIMU_10V5_H
 #define __ALTIMU_10V5_H
 
+#ifdef IMU_ALTIMU
 /* Calibration, Conversion factors */
 
 #define DS33_G_FACTOR           1.0/(65536/2/2)     // LSM6DS33 datasheet (page 15)  0.061 mg/LSB
@@ -129,29 +130,6 @@
 #define LPS25H_THS_P_L             0x30
 #define LPS25H_THS_P_H             0x31
 
-uint8_t ALTIMU10v5_TestDevice(void);
-/**
-  * @brief  Initialize IMU
-  * LSM6DS33 +/- 2g acceleration and 245 gps for gyro    
-  */
-void ALTIMU10v5_Init(void);
-
-/**
-  * @brief  Reads the 3 accelerometer channels and stores them in *x,*y,*z
-  * units are m/s^2
-  */
-void ALTIMU10v5_ReadAccelerometerRaw(float *x, float *y, float *z);
-
-/**
-  * @brief  Reads the 3 gyro channels and stores them in *x,*y,*z
-  * units are rad/sec
-  */
-void ALTIMU10v5_ReadGyroRaw(float *x, float *y, float *z);
-
-/**
-  * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
-  * units are tesla uncalibrated
-  */
-void ALTIMU10v5_ReadMagnetometerRaw(double *x, double *y, double *z);
+#endif
 
 #endif /* __ALTIMU_10V5_H */

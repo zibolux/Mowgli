@@ -17,13 +17,16 @@
   ******************************************************************************
   */
 
+#include "board.h"
+#ifdef IMU_ALTIMU
+
 #include "imu/imu.h"
 #include "imu/altimu-10v5.h"
 #include "soft_i2c.h"
 #include "main.h"
 #include <math.h>
 
-#ifndef DISABLE_ALTIMU10v5
+
 /**
   * @brief  Test Device 
   * Perform any tests possible before actually enabling and using the device,
@@ -34,7 +37,7 @@
   * @retval          0 -> test failed 1-> test ok, good to init and use
   *
   */
-uint8_t ALTIMU10v5_TestDevice(void)
+uint8_t IMU_TestDevice(void)
 {
     uint8_t  val;
 
@@ -79,7 +82,7 @@ uint8_t ALTIMU10v5_TestDevice(void)
   * @brief  Initialize IMU
   * LSM6DS33 +/- 2g acceleration and 245 gps for gyro    
   */
-void ALTIMU10v5_Init(void)
+void IMU_Init(void)
 {
     /*******************************/
     /* LSM6DS33 Gyro/Accelerometer */
@@ -122,7 +125,7 @@ void ALTIMU10v5_Init(void)
   * @brief  Reads the 3 accelerometer channels and stores them in *x,*y,*z
   * units are m/s^2
   */
-void ALTIMU10v5_ReadAccelerometerRaw(float *x, float *y, float *z)
+void IMU_ReadAccelerometerRaw(float *x, float *y, float *z)
 {
     uint8_t accel_xyz[6];   // 2 bytes each
 
@@ -146,7 +149,7 @@ void ALTIMU10v5_ReadAccelerometerRaw(float *x, float *y, float *z)
   * @brief  Reads the 3 gyro channels and stores them in *x,*y,*z
   * units are rad/sec
   */
-void ALTIMU10v5_ReadGyroRaw(float *x, float *y, float *z)
+void IMU_ReadGyroRaw(float *x, float *y, float *z)
 {
     uint8_t gyro_xyz[6];   // 2 bytes each
 
@@ -161,7 +164,7 @@ void ALTIMU10v5_ReadGyroRaw(float *x, float *y, float *z)
   * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
   * units are tesla uncalibrated
   */
-void ALTIMU10v5_ReadMagnetometerRaw(double *x, double *y, double *z)
+void IMU_ReadMagnetometerRaw(double *x, double *y, double *z)
 {
     uint8_t mag_xyz[6];   // 2 bytes each
 
@@ -181,7 +184,7 @@ void ALTIMU10v5_ReadMagnetometerRaw(double *x, double *y, double *z)
   * (internal function only)
   * @retval 16 bit raw temp value
   */
-int16_t ALTIMU10v5_BarometerTempRaw(void)
+int16_t IMU_BarometerTempRaw(void)
 {
     uint8_t temp[2];   
     int16_t retval; // temp
@@ -198,7 +201,7 @@ int16_t ALTIMU10v5_BarometerTempRaw(void)
   * (internal function only)
   * @retval 24 bit raw temp value
   */
-static int32_t ALTIMU10v5_BarometerPressureRaw(void)
+int32_t IMU_BarometerPressureRaw(void)
 {
     uint8_t pressure[4]={0,0,0,0};   
     int32_t retval; // pressure (24bit)
@@ -215,18 +218,18 @@ static int32_t ALTIMU10v5_BarometerPressureRaw(void)
   * (internal function only)
   * @retval pressure in millibar
   */
-static float ALTIMU10v5_ReadBarometerPressureMilliBars(void)
+float IMU_ReadBarometerPressureMilliBars(void)
 {
-    return (float)ALTIMU10v5_BarometerPressureRaw() / 4096;
+    return (float)IMU_BarometerPressureRaw() / 4096;
 }
 
 /**
   * @brief  Calculate temperature in C
   * @retval temp in celsius
   */
-float ALTIMU10v5_ReadBarometerTemperatureC(void)
+float IMU_ReadBarometerTemperatureC(void)
 {
-    return 42.5 + (float)ALTIMU10v5_BarometerTempRaw() / 480;
+    return 42.5 + (float)IMU_BarometerTempRaw() / 480;
 }
 
 
@@ -235,8 +238,8 @@ float ALTIMU10v5_ReadBarometerTemperatureC(void)
   * assumes sealevel pressure of 1013.25mbar
   * @retval altitute in meters
   */
-float ALTIMU10v5_ReadBarometerAltitudeMeters(void)
+float IMU_ReadBarometerAltitudeMeters(void)
 {
-    return (1 - pow((float)ALTIMU10v5_ReadBarometerPressureMilliBars() / 1013.25, 0.190263)) * 44330.8;
+    return (1 - pow((float)IMU_ReadBarometerPressureMilliBars() / 1013.25, 0.190263)) * 44330.8;
 }
 #endif

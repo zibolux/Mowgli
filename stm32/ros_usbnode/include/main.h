@@ -54,13 +54,6 @@ typedef enum {
 #define DB_TRACE(...)\
             do { if (DB_ACTIVE) debug_printf( __VA_ARGS__); } while (0)
 
-
-#if DB_ACTIVE
-  int debug_assert(int condition,const char* msg);
-#else
-  #define debug_assert(...) 0
-#endif
-
 void ADC_Test();
 float ADC_BatteryVoltage(uint8_t adc_conversions);
 float ADC_ChargeVoltage(uint8_t adc_conversions);
