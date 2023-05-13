@@ -188,7 +188,7 @@ void ChargeController(void)
 
     case CHARGER_STATE_CHARGING_CC:
         // cap charge current at 1.5 Amps
-        if ((battery_voltage > BAT_CHARGE_CUTOFF_VOLTAGE && (chargecontrol_pwm_val > 0)) || ((current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 50)))
+        if ((battery_voltage > BAT_CHARGE_CUTOFF_VOLTAGE && (chargecontrol_pwm_val > 0)) || ((current > MAX_CHARGE_CURRENT) && (chargecontrol_pwm_val > 39)))
         {
             chargecontrol_pwm_val--;
         }
@@ -209,7 +209,7 @@ void ChargeController(void)
         {
           chargecontrol_pwm_val++;
         }            
-        if ((battery_voltage > BAT_CHARGE_CUTOFF_VOLTAGE && (chargecontrol_pwm_val > 0)) || (charge_voltage > (MAX_CHARGE_VOLTAGE) && (chargecontrol_pwm_val > 50)))
+        if ((battery_voltage > BAT_CHARGE_CUTOFF_VOLTAGE && (chargecontrol_pwm_val > 0)) || (charge_voltage > (MAX_CHARGE_VOLTAGE) && (chargecontrol_pwm_val > 39)))
         {
           chargecontrol_pwm_val--;
         }

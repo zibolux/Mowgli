@@ -228,7 +228,7 @@ void ADC_input(void)
 
     /* battery volatge calculation */
     l_fTmp = ((float)adc_u16BatteryVoltage / 4095.0f) * 3.3f * 10.09 + 0.6f;
-    battery_voltage = 0.4 * l_fTmp + 0.6 * battery_voltage;
+    battery_voltage = 0.2 * l_fTmp + 0.8 * battery_voltage;
 
      /*charger voltage calculation */
     l_fTmp = ((float)adc_u16ChargerVoltage / 4095.0f) * 3.3f * 16;

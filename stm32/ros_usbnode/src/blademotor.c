@@ -55,9 +55,11 @@ static BLADEMOTOR_STATE_e blademotor_eState = BLADEMOTOR_INIT_1;
 bool BLADEMOTOR_bActivated = false;
 uint16_t BLADEMOTOR_u16RPM = 0;
 uint16_t BLADEMOTOR_u16Power = 0;
+uint32_t BLADEMOTOR_u32Error = 0;
 
 static uint8_t blademotor_pu8ReceivedData[BLADEMOTOR_LENGTH_RECEIVED_MSG] = {0};
 static uint8_t blademotor_pu8RqstMessage[BLADEMOTOR_LENGTH_RQST_MSG]  = {0x55, 0xaa, 0x03, 0x20, 0x80, 0x00, 0xA2};
+static uint8_t blademotor_u8OnOff = 0;
 
 const uint8_t blademotor_pcu8Preamble[5]  = {0x55,0xAA,0x0A,0x2,0xD0};
 const uint8_t blademotor_pcu8InitMsg[BLADEMOTOR_LENGTH_INIT_MSG] =  { 0x55, 0xaa, 0x12, 0x20, 0x80, 0x00, 0xac, 0x0d, 0x00, 0x02, 0x32, 0x50, 0x1e, 0x04, 0x00, 0x15, 0x21, 0x05, 0x0a, 0x19, 0x3c, 0xaa };
@@ -68,6 +70,20 @@ const uint8_t blademotor_pcu8InitMsg[BLADEMOTOR_LENGTH_INIT_MSG] =  { 0x55, 0xaa
 /******************************************************************************
 *  Public Functions
 *******************************************************************************/
+
+void blademotor_prepareMsg(void)
+{    
+    if (blademotor_u8OnOff)
+    {
+        blademotor_pu8RqstMessage[5] = 0x80; /* change speed Motor */
+        blademotor_pu8RqstMessage[6] = 0x22; /* change CRC */
+    }
+    else
+    {
+        blademotor_pu8RqstMessage[5] = 0x00; /* change speed Motor */
+        blademotor_pu8RqstMessage[6] = 0xa2; /* change CRC */
+    }
+}
 
 /**
  * @brief Init the Blade Motor Serial Port (PAC5223)
@@ -171,16 +187,15 @@ void  BLADEMOTOR_App(void){
     
     case BLADEMOTOR_RUN:
 
+        /*error detected*/
+        if(blademotor_pu8ReceivedData[6] != 0){
+            blademotor_u8OnOff = 0;
+            BLADEMOTOR_u32Error++;
+        }
+        blademotor_prepareMsg();
         /* prepare to receive the message before to launch the command */        
         HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler, blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG);
-        if(blademotor_pu8ReceivedData[6] != 0){
-            debug_printf(" * Blade Motor Error\r\n");     
-            bool on_off = blademotor_pu8RqstMessage[5] == 0x80;
-            BLADEMOTOR_Set(0);
-            HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);    
-            HAL_UART_Receive_DMA(&BLADEMOTOR_USART_Handler, blademotor_pu8ReceivedData, BLADEMOTOR_LENGTH_RECEIVED_MSG);
-            BLADEMOTOR_Set(on_off);
-        }            
+                  
         HAL_UART_Transmit_DMA(&BLADEMOTOR_USART_Handler, (uint8_t*)blademotor_pu8RqstMessage, BLADEMOTOR_LENGTH_RQST_MSG);    
         break;
     
@@ -192,7 +207,8 @@ void  BLADEMOTOR_App(void){
 /// @brief control blade motor (there is no speed control for this motor)
 /// @param on_off 1 to turn on, 0 to turn off
 void BLADEMOTOR_Set(uint8_t on_off)
-{    
+{       
+    blademotor_u8OnOff = on_off;
     if (on_off)
     {
         blademotor_pu8RqstMessage[5] = 0x80; /* change speed Motor */

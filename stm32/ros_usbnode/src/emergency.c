@@ -120,6 +120,7 @@ void EmergencyController(void)
     uint8_t accelerometer_int_triggered = Emergency_LowZAccelerometer();
 
     uint32_t now = HAL_GetTick();
+    static uint32_t l_u32timestamp = 0;
 
 #ifdef EMERGENCY_DEBUG
     debug_printf("EmergencyController()\r\n");
@@ -232,13 +233,18 @@ void EmergencyController(void)
                 emergency_state = 0;
                 debug_printf(" ## EMERGENCY ## - manual reset\r\n");
 				StatusLEDUpdate();
-                chirp(1);
+                do_chirp=1;
             }
         }
     }
     else
     {
         play_button_started = 0;
+    }
+    /* play buzzer when emergency every 5s*/
+    if(emergency_state  && ((HAL_GetTick()-l_u32timestamp) > 5000)){
+        l_u32timestamp = HAL_GetTick();
+        do_chirp=5;
     }
 }
 

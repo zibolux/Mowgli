@@ -40,6 +40,18 @@ typedef enum {
     RX_TIMEOUT_ERROR,
 }rx_status_e;
 
+/*
+* OPENMOWER HIGH STATUS
+*/
+typedef enum {
+  OPENMOWER_STATUS_MOWING = 0,
+  OPENMOWER_STATUS_DOCKING,
+  OPENMOWER_STATUS_UNDOCKING,
+  OPENMOWER_STATUS_IDLE,
+  OPENMOWER_STATUS_RECORD,
+  OPENMOWER_STATUS_MAX_STATUS,
+}openmower_status_e;
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -71,6 +83,7 @@ void chirp(uint8_t count);
 extern uint16_t  chargecontrol_pwm_val;
 extern uint8_t   chargecontrol_is_charging;
 extern uint8_t do_chirp;
+extern openmower_status_e main_eOpenmowerStatus;
 
 // uart statistics
 extern uint16_t cnt_uart4_overrun;      // master

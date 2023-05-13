@@ -6,4 +6,4 @@
 *.o
 raspi_remote_upload.py
 platformio.ini
-
+*.bin

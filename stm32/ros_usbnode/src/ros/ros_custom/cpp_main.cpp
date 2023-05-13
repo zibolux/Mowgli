@@ -28,6 +28,7 @@
 #include "ringbuffer.h"
 #include "ros.h"
 #include "ros/time.h"
+#include "ros/duration.h"
 #include "tf/tf.h"
 #include "tf/transform_broadcaster.h"
 #include "std_msgs/Bool.h"
@@ -76,6 +77,7 @@ uint8_t RxBuffer[RxBufferSize];
 struct ringbuffer rb;
 
 ros::Time last_cmd_vel(0, 0);
+ros::Time cmd_vel_old(0, 0);
 uint32_t last_cmd_vel_age;	 // age of last velocity command
 
 // drive motor control
@@ -109,13 +111,9 @@ sensor_msgs::Range bumper_right_msg;
 // IMU
 // external IMU (i2c)
 sensor_msgs::Imu imu_msg;
-sensor_msgs::MagneticField imu_mag_msg;
 // onboard IMU (accelerometer and temp)
 sensor_msgs::Imu imu_onboard_msg;
 // sensor_msgs::Temperature imu_onboard_temp_msg;
-
-// sensor_msgs::MagneticField imu_mag_calibration_msg;
-mowgli::magnetometer imu_mag_calibration_msg;
 
 // mowgli status message
 mowgli::status status_msg;
@@ -123,7 +121,7 @@ mowgli::status status_msg;
 mower_msgs::Status om_mower_status_msg;
 xbot_msgs::WheelTick wheel_ticks_msg;
 mower_msgs::HighLevelStatus high_level_status;
-
+float clamp(float d, float min, float max);
 /*
  * PUBLISHERS
  */
@@ -192,21 +190,67 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 	} else {
 		PANEL_Set_LED(PANEL_LED_LOCK, PANEL_LED_ON);
 	}
-	switch (high_level_status.state) {
-		case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS:
-			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_ON);
-		break;
-		default:
-			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_OFF);
-	}
 	if (blade_on_off) {
 		if (BLADEMOTOR_bActivated) {
-			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_FLASH_SLOW);
+			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_FLASH_SLOW);
 		} else {
-			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_ON);
+			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_ON);
 		}
 	} else {
-			PANEL_Set_LED(PANEL_LED_4H, PANEL_LED_OFF);
+			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_OFF);
+	}
+
+	/* led on in function of the current state of openmower*/
+	switch (msg.state & 0b11111) {
+	case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_AUTONOMOUS:
+		PANEL_Set_LED(PANEL_LED_S1, PANEL_LED_ON);
+		PANEL_Set_LED(PANEL_LED_S2, PANEL_LED_OFF);
+
+		switch ((msg.state>>mower_msgs::HighLevelStatus::SUBSTATE_SHIFT)){
+			case mower_msgs::HighLevelStatus::SUBSTATE_1:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_ON);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+				main_eOpenmowerStatus = OPENMOWER_STATUS_MOWING;
+			break;
+			case mower_msgs::HighLevelStatus::SUBSTATE_2:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_ON);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+				main_eOpenmowerStatus = OPENMOWER_STATUS_DOCKING;
+			break;
+			case mower_msgs::HighLevelStatus::SUBSTATE_3:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_ON);
+				main_eOpenmowerStatus = OPENMOWER_STATUS_UNDOCKING;
+			break;
+			case mower_msgs::HighLevelStatus::SUBSTATE_4:
+			default:
+				PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+				PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+				/* unknow status */
+				main_eOpenmowerStatus = OPENMOWER_STATUS_MAX_STATUS;
+			break;
+		} 
+	break;
+
+	case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_RECORDING:
+		PANEL_Set_LED(PANEL_LED_S1, PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_S2, PANEL_LED_ON);
+		main_eOpenmowerStatus = OPENMOWER_STATUS_RECORD;
+	break;
+
+	case mower_msgs::HighLevelStatus::HIGH_LEVEL_STATE_IDLE:
+	default:
+		PANEL_Set_LED(PANEL_LED_S1, PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_S2, PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_4H,  PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
+		PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
+		main_eOpenmowerStatus = OPENMOWER_STATUS_IDLE;
+	break;
 	}
 }
 /*
@@ -215,17 +259,50 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
  */
 extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist &msg)
 {
+	
+	double l_fSeconddt;
+	double l_fVx;
+	double l_fVz;
+	static double l_foldVx;
+	static double l_foldVz;
+
 	last_cmd_vel = nh.now();
 
 	//	debug_printf("x: %f  z: %f\r\n", msg.linear.x, msg.angular.z);
+	l_fSeconddt = (last_cmd_vel.toSec()) - (cmd_vel_old.toSec());
+	cmd_vel_old = last_cmd_vel;
+
+
+	/* Limit max speed */
+	l_fVx = clamp(msg.linear.x, -0.5, 0.5);
+	l_fVz = clamp(msg.angular.z , -3.2, 3.2);
+
+	/* Limit acceleration */
+	double dv_min = -0.5 * l_fSeconddt;
+    double dv_max = 0.1 * l_fSeconddt;
+
+    double dv = clamp(l_fVx - l_foldVx, dv_min, dv_max);
+
+    l_fVx = l_foldVx + dv;
+
+	dv_min = -1.0 * l_fSeconddt;
+    dv_max = 1.0 * l_fSeconddt;
+
+    dv = clamp(l_fVz - l_foldVz, dv_min, dv_max);
+
+    //l_fVz = l_foldVz + dv;
+
+	/* keep in memory the valid cmd*/
+	l_foldVx = l_fVx;
+	l_foldVz = l_fVz;
 
 	// calculate twist speeds to add/substract
-	float left_twist_mps = -1.0 * msg.angular.z * WHEEL_BASE * 0.5;
-	float right_twist_mps = msg.angular.z * WHEEL_BASE * 0.5;
+	float left_twist_mps = -1.0 * l_fVz * WHEEL_BASE * 0.5;
+	float right_twist_mps = l_fVz* WHEEL_BASE * 0.5;
 
 	// add them to the linear speed
-	float left_mps = msg.linear.x + left_twist_mps;
-	float right_mps = msg.linear.x + right_twist_mps;
+	float left_mps = l_fVx + left_twist_mps;
+	float right_mps = l_fVx + right_twist_mps;
 
 	// cap left motor speed to MAX_MPS
 	if (left_mps > MAX_MPS)
@@ -296,7 +373,7 @@ extern "C" void motors_handler()
 		if (Emergency_State())
 		{
 			DRIVEMOTOR_SetSpeed(0, 0, 0, 0);
-			BLADEMOTOR_Set(0);
+			blade_on_off = 0;
 		}
 		else
 		{
@@ -373,13 +450,13 @@ extern "C" void ultrasonic_handler(void)
 	ultrasonic_left_msg.field_of_view = 0.5; /* 30°*/
 	ultrasonic_left_msg.min_range = 0.30;
 	ultrasonic_left_msg.max_range = 2.0;
-	ultrasonic_left_msg.range = (float)(ULTRASONICSENSOR_u32GetLeftDistance()) / 10000;
+	ultrasonic_left_msg.range = 0.5 * (ultrasonic_left_msg.range) + 0.5 * (float)(ULTRASONICSENSOR_u32GetLeftDistance()) / 10000;
 
 	ultrasonic_right_msg.radiation_type = 0;
 	ultrasonic_right_msg.field_of_view = 0.5; /* 30°*/
 	ultrasonic_right_msg.min_range = 0.30;
 	ultrasonic_right_msg.max_range = 2.0;
-	ultrasonic_right_msg.range = (float)(ULTRASONICSENSOR_u32GetRightDistance()) / 10000;
+	ultrasonic_right_msg.range = 0.5 * (ultrasonic_right_msg.range) + 0.5 * (float)(ULTRASONICSENSOR_u32GetRightDistance()) / 10000;
 
 
 	pubLeftUltrasonic.publish(&ultrasonic_left_msg);
@@ -504,7 +581,8 @@ extern "C" void broadcast_handler()
 		om_mower_status_msg.mow_esc_status.temperature_motor = blade_temperature;
 		om_mower_status_msg.mow_esc_status.tacho = BLADEMOTOR_u16RPM;
 		om_mower_status_msg.mow_esc_status.current = BLADEMOTOR_u16Power;
-		om_mower_status_msg.mow_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
+		om_mower_status_msg.mow_esc_status.temperature_pcb = BLADEMOTOR_u32Error;
+		om_mower_status_msg.mow_esc_status.status =mower_msgs::ESCStatus::ESC_STATUS_OK;
 		om_mower_status_msg.left_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
 		om_mower_status_msg.right_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
 
@@ -721,4 +799,9 @@ extern "C" void init_ROS()
 	NBT_init(&imu_nbt, IMU_NBT_TIME_MS);
 	NBT_init(&motors_nbt, MOTORS_NBT_TIME_MS);
 	NBT_init(&ros_nbt, 10);
+}
+
+float clamp(float d, float min, float max) {
+  const float t = d < min ? min : d;
+  return t > max ? max : t;
 }

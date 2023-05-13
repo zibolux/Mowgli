@@ -44,6 +44,7 @@ extern "C" {
 extern bool BLADEMOTOR_bActivated;
 extern uint16_t BLADEMOTOR_u16RPM;
 extern uint16_t BLADEMOTOR_u16Power;
+extern uint32_t BLADEMOTOR_u32Error;
 /******************************************************************************
 * PUBLIC Function Prototypes
 *******************************************************************************/

@@ -69,6 +69,8 @@ static char master_tx_buffer[255];
 uint8_t do_chirp_duration_counter;
 uint8_t do_chirp = 0;
 
+openmower_status_e main_eOpenmowerStatus = OPENMOWER_STATUS_IDLE;
+
 UART_HandleTypeDef MASTER_USART_Handler; // UART  Handle
 
 // Drive Motors DMA
@@ -265,7 +267,7 @@ int main(void)
       {
         TIM3_Handle.Instance->CCR4 = 10; // chirp on
         TIM4_Handle.Instance->CCR3 = 10; // chirp on
-        do_chirp = 0;
+        do_chirp--;
         do_chirp_duration_counter = 0;
       }
       if (do_chirp_duration_counter == 1)
