@@ -16,7 +16,9 @@
         "cmath": "cpp",
         "*.tcc": "c",
         "stdbool.h": "c",
-        "main.h": "c"
+        "main.h": "c",
+        "mpu6050.h": "c",
+        "wt901.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

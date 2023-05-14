@@ -60,8 +60,9 @@ static nbt_t main_blademotor_nbt;
 static nbt_t main_drivemotor_nbt;
 static nbt_t main_wdg_nbt;
 static nbt_t main_buzzer_nbt;
+#if (DEBUG_TYPE != DEBUG_TYPE_UART) && (OPTION_ULTRASONIC == 1)
 static nbt_t main_ultrasonicsensor_nbt;
-
+#endif
 volatile uint8_t master_tx_busy = 0;
 static uint8_t master_tx_buffer_len;
 static char master_tx_buffer[255];
@@ -80,6 +81,14 @@ TIM_HandleTypeDef TIM3_Handle; // PWM Beeper
 TIM_HandleTypeDef TIM4_Handle; // PWM Buzzer
 IWDG_HandleTypeDef IwdgHandle = {0};
 WWDG_HandleTypeDef WwdgHandle = {0};
+
+#if DB_ACTIVE
+int debug_assert(int condition,const char* msg) {
+  if (condition) return 0;
+  debug_printf(msg);
+  return 1;
+}
+#endif
 
 int main(void)
 {
@@ -145,9 +154,8 @@ int main(void)
   SW_I2C_Init();
   DB_TRACE(" * Soft I2C (J18) initialized\r\n");
   DB_TRACE(" * Testing supported IMUs:\r\n");
-  IMU_TestDevice();
   IMU_Init();
-  IMU_Calibrate();
+  IMU_CalibrateExternal();
   PANEL_Init();
   DB_TRACE(" * Panel initialized\r\n");
   Emergency_Init();
@@ -267,7 +275,7 @@ int main(void)
       {
         TIM3_Handle.Instance->CCR4 = 10; // chirp on
         TIM4_Handle.Instance->CCR3 = 10; // chirp on
-        do_chirp--;
+        do_chirp = 0;
         do_chirp_duration_counter = 0;
       }
       if (do_chirp_duration_counter == 1)

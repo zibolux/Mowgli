@@ -21,9 +21,6 @@ extern "C"
  #define BOARD_YARDFORCE500 1
 //#define BOARD_LUV1000RI 1
 
-#define IMU_ALTIMU 
-//#define IMU_WT901 
-
 /* definition type don't modify */
 #define DEBUG_TYPE_NONE 0
 #define DEBUG_TYPE_UART 1

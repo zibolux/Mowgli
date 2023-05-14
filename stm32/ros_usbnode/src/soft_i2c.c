@@ -72,7 +72,7 @@ void SW_I2C_Init(void)
     GPIO_InitTypeDef GPIO_InitStruct;
     
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
 
 
@@ -144,7 +144,7 @@ void sda_out_mode(void)
 
     GPIO_InitTypeDef GPIO_InitStruct;
     
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
 
@@ -171,7 +171,7 @@ void scl_out_mode(void)
     GPIO_InitTypeDef GPIO_InitStruct;
 
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;		// error point GPIO_Mode_Out_PP	
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;		// error point GPIO_Mode_Out_PP	
     GPIO_InitStruct.Pull = GPIO_PULLUP;
 
     GPIO_InitStruct.Pin   = SW_I2C1_SCL_PIN;
@@ -211,44 +211,54 @@ void i2c_stop_condition(void)
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
     sda_high();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
+    scl_low();
 }
 
-uint8_t i2c_check_ack(void)
+static int i2c_check_ack(void)
 {
-    uint8_t         ack;
     int             i;
-    unsigned int    temp;
 
     sda_in_mode();
+    TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
     scl_high();
 
-    ack = FALSE;
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
-
-    for (i = 50; i > 0; i--)
+    for (i = 20000; i > 0; i--)
     {
-        temp = !(SW_I2C_ReadVal_SDA());	//0=ack , 1=nack
-        if (temp)	// if ack, enter
-        {
-            ack = TRUE;
-            break;
-        }
+        if (!SW_I2C_ReadVal_SDA()) break;	//0=ack , 1=nack
     }
     scl_low();
-    sda_out_mode();	//during setting, sda signal high
-
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
-    return ack;
-}
-
-void i2c_check_not_ack(void)
-{
-    sda_in_mode();
-    i2c_clk_data_out();
     sda_out_mode();
+
+    return i;
+}
+
+void i2c_send_not_ack(void)
+{
+    i2c_clk_data_out();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 }
+
+void i2c_send_final_nack(void)
+{
+    sda_out_mode();
+    sda_high();
+
+    TIMER__Wait_us(SW_I2C_WAIT_TIME);
+    scl_high();
+
+    TIMER__Wait_us(SW_I2C_WAIT_TIME);
+
+    scl_low();
+}
+
+void i2c_check_final_read_not_ack(void)
+{
+    i2c_clk_data_out();
+    TIMER__Wait_us(SW_I2C_WAIT_TIME);
+    sda_out_mode();
+}
+
 
 void i2c_check_not_ack_continue(void)
 {
@@ -258,43 +268,22 @@ void i2c_check_not_ack_continue(void)
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 }
 
-void i2c_slave_address(uint8_t IICID, uint8_t readwrite)
+void i2c_byte_out(uint8_t addr)
 {
-    int x;
+    int  x;
 
-    if (readwrite)
+    for (x = 128; x ; x>>=1)
     {
-        IICID |= I2C_READ;
-    }
-    else
-    {
-        IICID &= ~I2C_READ;
-    }
-
-    scl_low();
-
-    for (x = 7; x >= 0; x--)
-    {
-        sda_out(IICID & (1 << x));
+        sda_out(addr & x);
         TIMER__Wait_us(SW_I2C_WAIT_TIME);
         i2c_clk_data_out();
 //        TIMER__Wait_us(SW_I2C_WAIT_TIME);
     }
 }
 
-void i2c_register_address(uint8_t addr)
+void i2c_slave_address(uint8_t IICID, uint8_t readwrite)
 {
-    int  x;
-
-    scl_low();
-
-    for (x = 7; x >= 0; x--)
-    {
-        sda_out(addr & (1 << x));
-        TIMER__Wait_us(SW_I2C_WAIT_TIME);
-        i2c_clk_data_out();
-//        TIMER__Wait_us(SW_I2C_WAIT_TIME);
-    }
+    i2c_byte_out(IICID | (readwrite ? I2C_READ : 0));
 }
 
 void i2c_send_ack(void)
@@ -305,15 +294,11 @@ void i2c_send_ack(void)
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
     scl_high();
 
-    TIMER__Wait_us(SW_I2C_WAIT_TIME << 1);
-
-    sda_low();
-    TIMER__Wait_us(SW_I2C_WAIT_TIME << 1);
+    TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
     scl_low();
-
-    sda_out_mode();
-
+    sda_in_mode();
+    
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 }
 
@@ -343,28 +328,26 @@ void SW_I2C_Write_Data(uint8_t data)
     }
 }
 
-uint8_t SW_I2C_Read_Data(void)
+uint8_t SW_I2C_Read_Data_in_in_mode(void)
 {
     int      x;
     uint8_t  readdata = 0;
 
     sda_in_mode();
-
-    for (x = 8; x--;)
+    for (x = 128; x; x>>=1)
     {
+        TIMER__Wait_us(SW_I2C_WAIT_TIME);
         scl_high();
 
-        readdata <<= 1;
-        if (SW_I2C_ReadVal_SDA())
-            readdata |= 0x01;
-
         TIMER__Wait_us(SW_I2C_WAIT_TIME);
+
+        if (SW_I2C_ReadVal_SDA())
+            readdata |= x;
+
         scl_low();
 
-        TIMER__Wait_us(SW_I2C_WAIT_TIME);
     }
 
-    sda_out_mode();
     return readdata;
 }
 
@@ -380,15 +363,11 @@ uint8_t SW_I2C_WriteControl_8Bit(uint8_t IICID, uint8_t regaddr, uint8_t data)
         returnack = FALSE;
     }
 
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
-
-    i2c_register_address(regaddr);
+    i2c_byte_out(regaddr);
     if (!i2c_check_ack())
     {
         returnack = FALSE;
     }
-
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
     SW_I2C_Write_Data(data);
     if (!i2c_check_ack())
@@ -415,7 +394,7 @@ uint8_t SW_I2C_WriteControl_8Bit_OnlyRegAddr(uint8_t IICID, uint8_t regaddr)
         returnack = FALSE;
     }
 
-    i2c_register_address(regaddr);
+    i2c_byte_out(regaddr);
     if (!i2c_check_ack())
     {
         returnack = FALSE;
@@ -440,7 +419,7 @@ uint8_t SW_I2C_WriteControl_16Bit(uint8_t IICID, uint8_t regaddr, uint16_t data)
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    i2c_register_address(regaddr);
+    i2c_byte_out(regaddr);
     if (!i2c_check_ack())
     {
         returnack = FALSE;
@@ -483,7 +462,7 @@ uint8_t SW_I2C_ReadControl_8Bit_OnlyRegAddr(uint8_t IICID, uint8_t regaddr)
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    i2c_register_address(regaddr);
+    i2c_byte_out(regaddr);
     if (!i2c_check_ack())
     {
         returnack = FALSE;
@@ -509,9 +488,9 @@ uint8_t SW_I2C_ReadControl_8Bit_OnlyData(uint8_t IICID)
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    readdata = SW_I2C_Read_Data();
+    readdata = SW_I2C_Read_Data_in_in_mode();
 
-    i2c_check_not_ack();
+    i2c_check_final_read_not_ack();
 
     i2c_stop_condition();
 
@@ -526,18 +505,17 @@ uint16_t SW_I2C_ReadControl_16Bit_OnlyData(uint8_t IICID)
     i2c_start_condition();
 
     i2c_slave_address(IICID, READ_CMD);
-    i2c_check_not_ack();
+    i2c_send_not_ack();
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    readimsi = SW_I2C_Read_Data();
+    readimsi = SW_I2C_Read_Data_in_in_mode();
     i2c_check_not_ack_continue();
 
     readdata = readimsi<<8;
 
-    readimsi = SW_I2C_Read_Data();
-    i2c_check_not_ack();
-
+    readimsi = SW_I2C_Read_Data_in_in_mode();
+    i2c_check_final_read_not_ack();
 
     readdata |= readimsi;
 
@@ -555,23 +533,19 @@ uint8_t SW_I2C_ReadControl_8Bit(uint8_t IICID, uint8_t regaddr)
     i2c_start_condition();
 
     i2c_slave_address(IICID, WRITE_CMD);
-    i2c_check_ack();
+    if (!i2c_check_ack()) return 0x80; // TODO error handling
 
-    i2c_register_address(regaddr);
-    i2c_check_ack();
-
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
+    i2c_byte_out(regaddr);
+    if (!i2c_check_ack()) return 0x40; // TODO error handling
 
     i2c_start_condition();
 
     i2c_slave_address(IICID, READ_CMD);
-    i2c_check_ack();
+    if (!i2c_check_ack()) return 0x20; // TODO error handling
 
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
+    readdata = SW_I2C_Read_Data_in_in_mode();
 
-    readdata = SW_I2C_Read_Data();
-
-    i2c_check_not_ack();
+    i2c_check_final_read_not_ack();
 
     i2c_stop_condition();
 
@@ -589,7 +563,7 @@ uint16_t SW_I2C_ReadControl_16Bit(uint8_t IICID, uint8_t regaddr)
     i2c_slave_address(IICID, WRITE_CMD);
     i2c_check_ack();
 
-    i2c_register_address(regaddr);
+    i2c_byte_out(regaddr);
     i2c_check_ack();
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
@@ -601,13 +575,13 @@ uint16_t SW_I2C_ReadControl_16Bit(uint8_t IICID, uint8_t regaddr)
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    readdata = SW_I2C_Read_Data();
+    readdata = SW_I2C_Read_Data_in_in_mode();
     i2c_send_ack();
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
-    readdata = ((readdata << 8) | SW_I2C_Read_Data());
+    readdata = ((readdata << 8) | SW_I2C_Read_Data_in_in_mode());
 
-    i2c_check_not_ack();
+    i2c_check_final_read_not_ack();
 
     i2c_stop_condition();
 
@@ -628,7 +602,7 @@ uint8_t SW_I2C_ReadnControl_8Bit(uint8_t IICID, uint8_t regaddr, uint8_t rcnt, u
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
 	
-    i2c_register_address(regaddr);
+    i2c_byte_out(regaddr);
     if (!i2c_check_ack()) { returnack = FALSE; }
 
     TIMER__Wait_us(SW_I2C_WAIT_TIME);
@@ -640,12 +614,12 @@ uint8_t SW_I2C_ReadnControl_8Bit(uint8_t IICID, uint8_t regaddr, uint8_t rcnt, u
 
     for ( index = 0 ; index < rcnt ; index++){
     	TIMER__Wait_us(SW_I2C_WAIT_TIME);
-    	pdata[index] = SW_I2C_Read_Data();
+    	pdata[index] = SW_I2C_Read_Data_in_in_mode();
     }
 
-    pdata[rcnt-1] = SW_I2C_Read_Data();
+    pdata[rcnt-1] = SW_I2C_Read_Data_in_in_mode();
 	
-    i2c_check_not_ack();
+    i2c_send_final_nack();
 
     i2c_stop_condition();
 
@@ -664,12 +638,8 @@ uint8_t SW_I2C_Multi_ReadnControl_8Bit(uint8_t IICID, uint8_t regaddr, uint8_t r
     i2c_slave_address(IICID, WRITE_CMD);
     if (!i2c_check_ack()) { returnack = FALSE; }
 
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
-	
-    i2c_register_address(regaddr);
+    i2c_byte_out(regaddr);
     if (!i2c_check_ack()) { returnack = FALSE; }
-
-    TIMER__Wait_us(SW_I2C_WAIT_TIME);
 
     i2c_start_condition();
 
@@ -677,15 +647,14 @@ uint8_t SW_I2C_Multi_ReadnControl_8Bit(uint8_t IICID, uint8_t regaddr, uint8_t r
     if (!i2c_check_ack()) { returnack = FALSE; }
 
     for ( index = 0 ; index < (rcnt-1) ; index++){
-    	TIMER__Wait_us(SW_I2C_WAIT_TIME);
-    	pdata[index] = SW_I2C_Read_Data();
+    	pdata[index] = SW_I2C_Read_Data_in_in_mode();
 	    i2c_send_ack();
 	//if (!i2c_check_ack()) { returnack = FALSE; }
     }
 
-    pdata[rcnt-1] = SW_I2C_Read_Data();
+    pdata[rcnt-1] = SW_I2C_Read_Data_in_in_mode();
 	
-    i2c_check_not_ack();
+    i2c_check_final_read_not_ack();
     i2c_stop_condition();
 
     return returnack;

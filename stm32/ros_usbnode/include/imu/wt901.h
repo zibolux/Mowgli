@@ -13,33 +13,42 @@
 #ifndef __WT901_H
 #define __WT901_H
 
-#if defined(IMU_WT901)
+#ifndef DISABLE_WT901
 
 /******************************************************************************
 * Includes
 *******************************************************************************/
 #include "stm32f1xx_hal.h"
 
-/******************************************************************************
-* Preprocessor Constants
-*******************************************************************************/
+/**
+ * @brief Test for WT901
+ * 
+ * @return zero, if device is not found.
+ */
+uint8_t WT901_TestDevice(void);
 
-/******************************************************************************
-* Constants
-*******************************************************************************/
+/**
+  * @brief  Initialize WT901
+  */
+void WT901_Init(void);
 
-/******************************************************************************
-* Macros
-*******************************************************************************/
+/**
+  * @brief  Reads the 3 accelerometer channels and stores them in *x,*y,*z
+  * units are m/s^2
+  */
+void WT901_ReadAccelerometerRaw(float *x, float *y, float *z);
 
-/******************************************************************************
-* Typedefs
-*******************************************************************************/
+/**
+  * @brief  Reads the 3 gyro channels and stores them in *x,*y,*z
+  * units are rad/sec
+  */
+void WT901_ReadGyroRaw(float *x, float *y, float *z);
 
-/******************************************************************************
-* Variables
-*******************************************************************************/
-
+/**
+  * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
+  * units are tesla uncalibrated
+  */
+void WT901_ReadMagnetometerRaw(double *x, double *y, double *z);
 
 #endif
 #endif /*WT901_H*/ 
