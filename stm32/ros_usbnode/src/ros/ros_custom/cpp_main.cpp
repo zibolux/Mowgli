@@ -250,6 +250,7 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 		PANEL_Set_LED(PANEL_LED_6H,  PANEL_LED_OFF);
 		PANEL_Set_LED(PANEL_LED_8H,  PANEL_LED_OFF);
 		main_eOpenmowerStatus = OPENMOWER_STATUS_IDLE;
+		left_speed = right_speed = left_dir = right_dir = blade_on_off = 0;
 	break;
 	}
 }
