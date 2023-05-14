@@ -267,35 +267,37 @@ extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist &msg)
 	static double l_foldVz;
 
 	last_cmd_vel = nh.now();
+	if (main_eOpenmowerStatus != OPENMOWER_STATUS_RECORD) {
+		l_fSeconddt = (last_cmd_vel.toSec()) - (cmd_vel_old.toSec());
+		cmd_vel_old = last_cmd_vel;
 
-	//	debug_printf("x: %f  z: %f\r\n", msg.linear.x, msg.angular.z);
-	l_fSeconddt = (last_cmd_vel.toSec()) - (cmd_vel_old.toSec());
-	cmd_vel_old = last_cmd_vel;
 
+		/* Limit max speed */
+		l_fVx = clamp(msg.linear.x, -0.5, 0.5);
+		l_fVz = clamp(msg.angular.z , -3.2, 3.2);
 
-	/* Limit max speed */
-	l_fVx = clamp(msg.linear.x, -0.5, 0.5);
-	l_fVz = clamp(msg.angular.z , -3.2, 3.2);
+		/* Limit acceleration */
+		double dv_min = -0.5 * l_fSeconddt;
+		double dv_max = 0.1 * l_fSeconddt;
 
-	/* Limit acceleration */
-	double dv_min = -0.5 * l_fSeconddt;
-    double dv_max = 0.1 * l_fSeconddt;
+		double dv = clamp(l_fVx - l_foldVx, dv_min, dv_max);
 
-    double dv = clamp(l_fVx - l_foldVx, dv_min, dv_max);
+		l_fVx = l_foldVx + dv;
 
-    l_fVx = l_foldVx + dv;
+		dv_min = -1.0 * l_fSeconddt;
+		dv_max = 1.0 * l_fSeconddt;
 
-	dv_min = -1.0 * l_fSeconddt;
-    dv_max = 1.0 * l_fSeconddt;
+		dv = clamp(l_fVz - l_foldVz, dv_min, dv_max);
 
-    dv = clamp(l_fVz - l_foldVz, dv_min, dv_max);
-
-    //l_fVz = l_foldVz + dv;
-
-	/* keep in memory the valid cmd*/
-	l_foldVx = l_fVx;
-	l_foldVz = l_fVz;
-
+		//l_fVz = l_foldVz + dv;
+		
+		/* keep in memory the valid cmd*/
+		l_foldVx = l_fVx;
+		l_foldVz = l_fVz;
+	} else {
+		l_fVz = msg.angular.z;
+		l_fVx = msg.linear.x;
+	}
 	// calculate twist speeds to add/substract
 	float left_twist_mps = -1.0 * l_fVz * WHEEL_BASE * 0.5;
 	float right_twist_mps = l_fVz* WHEEL_BASE * 0.5;
@@ -333,6 +335,7 @@ extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist &msg)
 
 	//	debug_printf("left_mps: %f (%c)  right_mps: %f (%c)\r\n", left_mps, left_dir?'F':'R', right_mps, right_dir?'F':'R');
 }
+
 
 uint8_t CDC_DataReceivedHandler(const uint8_t *Buf, uint32_t len)
 {
