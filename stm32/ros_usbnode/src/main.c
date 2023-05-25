@@ -123,7 +123,7 @@ int main(void)
   TF4_Init();
   DB_TRACE(" * 24V switched on\r\n");
   RAIN_Sensor_Init();
-  DB_TRACE(" * RAIN Sensor enable\r\n");
+  DB_TRACE(" * RAIN Sensor enabled\r\n");
   HALLSTOP_Sensor_Init();
   DB_TRACE(" * HALL Sensor enabled\r\n");
     
@@ -252,7 +252,7 @@ int main(void)
 
       // DB_TRACE(" temp : %.2f \n",blade_temperature);
       currentTick = HAL_GetTick();
-      DB_TRACE("t: %d \n", (currentTick - old_tick));
+      DB_TRACE(" Current ticktime: %d    \r", (currentTick - old_tick));
       old_tick = currentTick;
     }
 
@@ -715,7 +715,7 @@ void StatusLEDUpdate(void)
 {
   if (Emergency_State())
   {
-    DB_TRACE("Emergency !");
+    DB_TRACE("Emergency !\r\n");
     PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_FLASH_FAST);
   }
   else
@@ -870,7 +870,7 @@ static void WATCHDOG_vInit(void)
   if (HAL_IWDG_Init(&IwdgHandle) != HAL_OK)
   {
 #ifdef DB_ACTIVE
-    DB_TRACE(" IWDG init Error\n\r");
+    DB_TRACE(" IWDG init Error\r\n");
 #endif /* DB_ACTIVE */
   }
 
@@ -889,7 +889,7 @@ static void WATCHDOG_vInit(void)
   // if( HAL_WWDG_Init(&WwdgHandle) != HAL_OK )
   {
 #ifdef DB_ACTIVE
-    DB_TRACE(" WWDG init Error\n\r");
+    DB_TRACE(" WWDG init Error\r\n");
 #endif /* DB_ACTIVE */
   }
 } /* WATCHDOG_vInit() */
@@ -904,7 +904,7 @@ static void WATCHDOG_Refresh(void)
   if (HAL_WWDG_Refresh(&WwdgHandle) != HAL_OK)
   {
 #ifdef DB_ACTIVE
-    DB_TRACE(" WWDG refresh error\n\r");
+    DB_TRACE(" WWDG refresh error\r\n");
 #endif /* DB_ACTIVE */
   }
 
@@ -913,7 +913,7 @@ static void WATCHDOG_Refresh(void)
   if (HAL_IWDG_Refresh(&IwdgHandle) != HAL_OK)
   {
 #ifdef DB_ACTIVE
-    DB_TRACE(" IWDG refresh error\n\r");
+    DB_TRACE(" IWDG refresh error\r\n");
 #endif /* DB_ACTIVE */
   }
 }
