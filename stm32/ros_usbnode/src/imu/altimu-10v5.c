@@ -158,25 +158,6 @@ void ALTIMU10v5_ReadGyroRaw(float *x, float *y, float *z)
 }
 
 /**
-  * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
-  * units are tesla uncalibrated
-  */
-void ALTIMU10v5_ReadMagnetometerRaw(double *x, double *y, double *z)
-{
-    uint8_t mag_xyz[6];   // 2 bytes each
-
-    SW_I2C_UTIL_Read_Multi(LIS3MDL_ADDRESS, LIS3MDL_OUT_X_L, 6, (uint8_t*)&mag_xyz);
-
-    *x = (int16_t)(mag_xyz[1] << 8 | mag_xyz[0]);
-    *y = (int16_t)(mag_xyz[3] << 8 | mag_xyz[2]);
-    *z = (int16_t)(mag_xyz[5] << 8 | mag_xyz[4]);    
-
-    *x = IMU_MAG_TO_T(*x);
-    *y = IMU_MAG_TO_T(*y);
-    *z = IMU_MAG_TO_T(*z);        
-}
-
-/**
   * @brief  Reads the raw barometer temp value
   * (internal function only)
   * @retval 16 bit raw temp value

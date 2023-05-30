@@ -66,9 +66,6 @@ extern "C"
 #error "No board selection"
 #endif
 
-// define to support IMU Calibration (Mag) via https://github.com/pcdangio/ros-calibration_imu
-// #define SUPPORT_ROS_CALIBRATION_IMU           1
-
 // #define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
 /// nominal max charge current is 1.0 Amp
@@ -152,16 +149,6 @@ extern "C"
 #define TILT_PIN GPIO_PIN_8
 #define TILT_PORT GPIOA
 #define TILT_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
-
-/* SPI3 Flash */
-#define FLASH_CLK_PIN GPIO_PIN_3  // GPIO B
-#define FLASH_MISO_PIN GPIO_PIN_4 // GPIO B
-#define FLASH_MOSI_PIN GPIO_PIN_5 // GPIO B
-#define FLASH_SPI_PORT GPIOB
-#define FLASH_SPI_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
-#define FLASH_nCS_PIN GPIO_PIN_15 // GPIO A
-#define FLASH_SPICS_PORT GPIOA
-#define FLASH_SPICS_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
 
 /* Wheel lift - (HIGH when set) */
 #define WHEEL_LIFT_BLUE_PIN GPIO_PIN_0

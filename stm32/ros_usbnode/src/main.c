@@ -37,7 +37,6 @@
 #include "adc.h"
 #include "charger.h"
 #include "soft_i2c.h"
-#include "spiflash.h"
 #include "i2c.h"
 #include "imu/imu.h"
 #include "usb_device.h"
@@ -127,18 +126,7 @@ int main(void)
   DB_TRACE(" * RAIN Sensor enable\r\n");
   HALLSTOP_Sensor_Init();
   DB_TRACE(" * HALL Sensor enabled\r\n");
-  
-  if (SPIFLASH_TestDevice())
-  {
-    SPIFLASH_Config();
-    SPIFLASH_IncBootCounter();
-  }
-  else
-  {
-    DB_TRACE(" * SPIFLASH: unable to locate SPI Flash\r\n");
-  }
-  DB_TRACE(" * SPIFLASH initialized\r\n");
-  
+    
   I2C_Init();
   DB_TRACE(" * Hard I2C initialized\r\n");
   if (I2C_Acclerometer_TestDevice())

@@ -198,21 +198,6 @@ void WT901_ReadGyroRaw(float *x, float *y, float *z)
 }
 
 /**
-  * @brief  Reads the 3 magnetometer channels and stores them in *x,*y,*z  
-  * units are tesla uncalibrated
-  */
-void WT901_ReadMagnetometerRaw(double *x, double *y, double *z)
-{
-    uint8_t mag_xyz[6];   // 2 bytes each
-
-    SW_I2C_UTIL_Read_Multi(WT901_ADDRESS, HX, 6, (uint8_t*)&mag_xyz);
-
-    *x = (float)(int16_t)(mag_xyz[1] << 8 | mag_xyz[0]) * WT901_T_FACTOR;
-    *y = (float)(int16_t)(mag_xyz[3] << 8 | mag_xyz[2]) * WT901_T_FACTOR;
-    *z = (float)(int16_t)(mag_xyz[5] << 8 | mag_xyz[4]) * WT901_T_FACTOR;     
-}
-
-/**
   * @brief  Reads the raw temp value
   * (internal function only)
   * @retval float temp in °C
