@@ -136,7 +136,7 @@ int main(void)
   else
   {
     chirp(3);
-    DB_TRACE(" * WARNING: initalization of onboard accelerometer for tilt protection failed !\r\n");
+    DB_TRACE("\e[01;31m * WARNING: initalization of onboard accelerometer for tilt protection failed !\e[0m\r\n");
   }
   DB_TRACE(" * Accelerometer (onboard/tilt safety) initialized\r\n");
   SW_I2C_Init();
@@ -184,16 +184,16 @@ int main(void)
   DB_TRACE(" * NBT Main timers initialized\r\n");
 
 #ifdef I_DONT_NEED_MY_FINGERS
-  DB_TRACE("\r\n");
+  DB_TRACE("\r\n\e[01;31m");
   DB_TRACE("=========================================================\r\n");
-  DB_TRACE(" EMERGENCY/SAFETY FEATURES ARE DISABLED IN board.h ! \r\n");
+  DB_TRACE("   EMERGENCY/SAFETY FEATURES ARE DISABLED IN board.h ! \r\n");
   DB_TRACE("=========================================================\r\n");
-  DB_TRACE("\r\n");
+  DB_TRACE("\e[0m\r\n");
 #endif
   // Initialize ROS
   init_ROS();
   DB_TRACE(" * ROS serial node initialized\r\n");
-  DB_TRACE("\r\n >>> entering main loop ...\r\n\r\n");
+  DB_TRACE("\r\n\e[01;36m >>> entering main loop ...\e[0m\r\n\r\n");
   // <chirp><chirp> means we are in the main loop
   chirp(2);
 
@@ -715,7 +715,7 @@ void StatusLEDUpdate(void)
 {
   if (Emergency_State())
   {
-    DB_TRACE("Emergency !\r\n");
+    DB_TRACE("\e[2K\e[01;31m EMERGENCY WAS TRIGGERED !\e[0m\r\n");
     PANEL_Set_LED(PANEL_LED_LIFTED, PANEL_LED_FLASH_FAST);
   }
   else
