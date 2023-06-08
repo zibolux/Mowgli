@@ -394,8 +394,8 @@ extern "C" void motors_handler()
 			{
 				blade_on_off = 0;
 			}
-			BLADEMOTOR_Set(blade_on_off);
 		}
+		BLADEMOTOR_Set(blade_on_off);
 	}
 }
 
