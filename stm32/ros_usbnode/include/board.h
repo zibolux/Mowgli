@@ -66,7 +66,7 @@ extern "C"
 #error "No board selection"
 #endif
 
-// #define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
+//#define I_DONT_NEED_MY_FINGERS              1      // disables EmergencyController() (no wheel lift, or tilt sensing and stopping the blade anymore)
 
 /// nominal max charge current is 1.0 Amp
 #define MAX_CHARGE_CURRENT 1.0f
@@ -96,11 +96,17 @@ extern "C"
 #define PLAY_BUTTON_CLEAR_EMERGENCY_MILLIS 2000
 #define IMU_ONBOARD_INCLINATION_THRESHOLD 0x38 // stock firmware uses 0x2C (way more allowed inclination)
 
+// Enable Emergency debugging
+//#define EMERGENCY_DEBUG
+
 // IMU configuration options
-// #define IMU_ONBOARD_ACCELERATION            0
-// #define IMU_ONBOARD_TEMP                    1
-#define IMU_ACCELERATION 1 // external IMU
-#define IMU_ANGULAR 1      // external IMU
+#define EXTERNAL_IMU_ACCELERATION  1
+#define EXTERNAL_IMU_ANGULAR       1
+
+// Force disable IMU to be detected - CURRENTLY THIS SETTING DOES NOT WORK!
+//#define DISABLE_ALTIMU10v5
+//#define DISABLE_MPU6050
+//#define DISABLE_WT901
 
 // we use J18 (Red 9 pin connector as Master Serial Port)
 #define MASTER_J18 1

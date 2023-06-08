@@ -508,7 +508,7 @@ extern "C" void broadcast_handler()
 		/**********************************/
 		/* Exernal Accelerometer 		  */
 		/**********************************/
-#ifdef IMU_ACCELERATION
+#ifdef EXTERNAL_IMU_ACCELERATION
 		// Linear acceleration
 		IMU_ReadAccelerometer(&imu_msg.linear_acceleration.x, &imu_msg.linear_acceleration.y, &imu_msg.linear_acceleration.z);
 		IMU_AccelerometerSetCovariance(imu_msg.linear_acceleration_covariance);
@@ -519,7 +519,7 @@ extern "C" void broadcast_handler()
 		/**********************************/
 		/* Exernal Gyro					  */
 		/**********************************/
-#ifdef IMU_ANGULAR
+#ifdef EXTERNAL_IMU_ANGULAR
 		// Angular velocity
 		IMU_ReadGyro(&imu_msg.angular_velocity.x, &imu_msg.angular_velocity.y, &imu_msg.angular_velocity.z);
 		IMU_GyroSetCovariance(imu_msg.angular_velocity_covariance);
