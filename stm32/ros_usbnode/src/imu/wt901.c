@@ -143,12 +143,12 @@ uint8_t WT901_TestDevice(void)
     val = SW_I2C_UTIL_Read(WT901_ADDRESS,(uint8_t)IICADDR);
     if (val == (WT901_ADDRESS)) /* should be 0x50 */
     {
-        DB_TRACE("   >> WT901 FOUND at I2C addr=0x%0x\r\n", WT901_ADDRESS);
+        DB_TRACE("    > [WT901] FOUND at I2C addr=0x%0x\r\n", WT901_ADDRESS);
         l_u8return = 1;
     }
     else
     {
-        DB_TRACE("   >> WT901 NOT FOUND at I2C addr=0x%0x\r\n", WT901_ADDRESS);
+        DB_TRACE("    > [WT901] - Error probing for (Gyro / Accelerometer) at I2C addr=0x%0x\r\n", WT901_ADDRESS);
         l_u8return = 0;
     }
  

@@ -52,11 +52,11 @@ float onboard_imu_cov_az = 0.01;
 // ---------------------
 
 static int assertAccelerometer() {
-  return debug_assert(imuReadAccelerometerRaw!=NULL,"Usage of non installed accelerometer");
+  return debug_assert(imuReadAccelerometerRaw!=NULL,"Usage of non installed accelerometer\r\n");
 }
 
 static int assertGyro() {
-  return debug_assert(imuReadGyroRaw!=NULL,"Usage of non installed gryometer");
+  return debug_assert(imuReadGyroRaw!=NULL,"Usage of non installed gryometer\r\n");
 }
 
 int IMU_HasAccelerometer() {
@@ -161,7 +161,7 @@ void IMU_CalibrateExternal()
     uint16_t i;
     
     
-    debug_printf("   >> External IMU Calibration started - make sure bot is level and standing still ...\r\n");    
+    debug_printf("    > External IMU Calibration started - make sure bot is level and standing still ...\r\n");    
     
     /************************************/
     /* calibrate external accelerometer */
@@ -182,7 +182,7 @@ void IMU_CalibrateExternal()
       imu_cal_ax = mean_x;
       imu_cal_ay = mean_y;
       imu_cal_az = 0;    // we dont want to calibrate Z because our IMU Sensor fusion stack expects gravity
-      debug_printf("   >> External IMU Calibration factors accelerometer [%f %f %f]\r\n", imu_cal_ax, imu_cal_ay, imu_cal_az);
+      debug_printf("    > External IMU Calibration factors accelerometer [%f %f %f]\r\n", imu_cal_ax, imu_cal_ay, imu_cal_az);
       stddev_x = stddev_y = stddev_z = 0;
       for (i=0; i<IMU_CAL_SAMPLES; i++)
       {
@@ -193,7 +193,7 @@ void IMU_CalibrateExternal()
       imu_cov_ax = stddev_x / IMU_CAL_SAMPLES;
       imu_cov_ay = stddev_y / IMU_CAL_SAMPLES;
       imu_cov_az = stddev_z / IMU_CAL_SAMPLES;
-      debug_printf("   >> External IMU Calibration accelerometer covariance diagonal [%f %f %f]\r\n", imu_cov_ax, imu_cov_ay, imu_cov_az); 
+      debug_printf("    > External IMU Calibration accelerometer covariance diagonal [%f %f %f]\r\n", imu_cov_ax, imu_cov_ay, imu_cov_az); 
     }
 
     /***************************/
@@ -215,7 +215,7 @@ void IMU_CalibrateExternal()
       imu_cal_gx = mean_x;
       imu_cal_gy = mean_y;
       imu_cal_gz = mean_z;
-      debug_printf("   >> External IMU Calibration factors gyro [%f %f %f]\r\n", imu_cal_gx, imu_cal_gy, imu_cal_gz);
+      debug_printf("    > External IMU Calibration factors gyro [%f %f %f]\r\n", imu_cal_gx, imu_cal_gy, imu_cal_gz);
       stddev_x = stddev_y = stddev_z = 0;
       for (i=0; i<IMU_CAL_SAMPLES; i++)
       {
@@ -226,7 +226,7 @@ void IMU_CalibrateExternal()
       imu_cov_gx = stddev_x / IMU_CAL_SAMPLES;
       imu_cov_gy = stddev_y / IMU_CAL_SAMPLES;
       imu_cov_gz = stddev_z / IMU_CAL_SAMPLES;
-      debug_printf("   >> External IMU Calibration gyro covariance diagonal [%f %f %f]\r\n", imu_cov_gx, imu_cov_gy, imu_cov_gz); 
+      debug_printf("    > External IMU Calibration gyro covariance diagonal [%f %f %f]\r\n", imu_cov_gx, imu_cov_gy, imu_cov_gz); 
     }
 }
 
@@ -238,7 +238,7 @@ void IMU_CalibrateOnboard()
     float sum_x, sum_y, sum_z;
     uint16_t i;
 
-    debug_printf("   >> Onboard IMU Calibration started - make sure bot is level and standing still ...\r\n");  
+    debug_printf("    > Onboard IMU Calibration started - make sure bot is level and standing still ...\r\n");  
 
     /************************************/
     /* calibrate onboard accelerometer  */
@@ -258,7 +258,7 @@ void IMU_CalibrateOnboard()
     onboard_imu_cal_ax = mean_x;
     onboard_imu_cal_ay = mean_y;
     onboard_imu_cal_az = 0;    // we dont want to calibrate Z because our IMU Sensor fusion stack expects gravity
-    debug_printf("   >> Onboard IMU Calibration factors accelerometer [%f %f %f]\r\n", onboard_imu_cal_ax, onboard_imu_cal_ay, onboard_imu_cal_az);
+    debug_printf("    > Onboard IMU Calibration factors accelerometer [%f %f %f]\r\n", onboard_imu_cal_ax, onboard_imu_cal_ay, onboard_imu_cal_az);
     stddev_x = stddev_y = stddev_z = 0;
     for (i=0; i<IMU_CAL_SAMPLES; i++)
     {
@@ -269,7 +269,7 @@ void IMU_CalibrateOnboard()
     onboard_imu_cov_ax = stddev_x / IMU_CAL_SAMPLES;
     onboard_imu_cov_ay = stddev_y / IMU_CAL_SAMPLES;
     onboard_imu_cov_az = stddev_z / IMU_CAL_SAMPLES;
-    debug_printf("   >> Onboard IMU Calibration accelerometer covariance diagonal [%f %f %f]\r\n", onboard_imu_cov_ax, onboard_imu_cov_ay, onboard_imu_cov_az); 
+    debug_printf("    > Onboard IMU Calibration accelerometer covariance diagonal [%f %f %f]\r\n", onboard_imu_cov_ax, onboard_imu_cov_ay, onboard_imu_cov_az); 
 }
 
 void IMU_Normalize( VECTOR* p )
