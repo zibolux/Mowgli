@@ -266,6 +266,9 @@ extern "C" void CommandVelocityMessageCb(const geometry_msgs::Twist &msg)
 	static double l_foldVz;
 
 	last_cmd_vel = nh.now();
+	if (main_eOpenmowerStatus == OPENMOWER_STATUS_IDLE) {
+		return;
+	}
 	if (main_eOpenmowerStatus != OPENMOWER_STATUS_RECORD) {
 		l_fSeconddt = (last_cmd_vel.toSec()) - (cmd_vel_old.toSec());
 		cmd_vel_old = last_cmd_vel;
