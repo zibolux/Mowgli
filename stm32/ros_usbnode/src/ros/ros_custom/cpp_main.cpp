@@ -193,16 +193,22 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 	{
 		if (BLADEMOTOR_bActivated)
 		{
+			#ifdef PANEL_LED_2H
 			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_FLASH_SLOW);
+			#endif
 		}
 		else
 		{
+			#ifdef PANEL_LED_2H
 			PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_ON);
+			#endif
 		}
 	}
 	else
 	{
+		#ifdef PANEL_LED_2H
 		PANEL_Set_LED(PANEL_LED_2H, PANEL_LED_OFF);
+		#endif			
 	}
 
 	/* led on in function of the current state of openmower*/
