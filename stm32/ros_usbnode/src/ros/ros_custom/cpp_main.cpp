@@ -84,6 +84,7 @@ static uint8_t right_dir = 0;
 
 // blade motor control
 static uint8_t blade_on_off = 0;
+static uint8_t blade_direction = 0;
 
 static uint8_t svcCfgDataBuffer[256];
 
@@ -336,7 +337,9 @@ extern "C" void chatter_handler()
 {
 	if (NBT_handler(&publish_nbt))
 	{
-		imu_onboard_temperature = IMU_Onboard_ReadTemp();
+		#ifdef ROS_PUBLISH_MOWGLI
+			imu_onboard_temperature = IMU_Onboard_ReadTemp();
+		#endif
 
 		HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN); // flash LED
 
@@ -381,7 +384,7 @@ extern "C" void motors_handler()
 				blade_on_off = 0;
 			}
 		}
-		BLADEMOTOR_Set(blade_on_off);
+		BLADEMOTOR_Set(blade_on_off, blade_direction);
 	}
 }
 
@@ -590,6 +593,7 @@ void cbEnableMowerMotor(const mower_msgs::MowerControlSrvRequest &req, mower_msg
 	if (req.mow_enabled && !Emergency_State())
 	{
 		blade_on_off = 1;
+		blade_direction = req.mow_direction;
 	}
 	else
 	{
