@@ -9,7 +9,7 @@ Date "2022-05-22"
 Rev "1.0.1"
 Comp ""
 Comment1 "(c) CyberNet / cn@warp.at"
-Comment2 "https://github.com/cloudn1ne/Mowgli"
+Comment2 "https://github.com/cedbossneo/Mowgli"
 Comment3 ""
 Comment4 ""
 $EndDescr
