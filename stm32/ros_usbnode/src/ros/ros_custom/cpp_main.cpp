@@ -385,7 +385,7 @@ extern "C" void motors_handler()
 			last_cmd_vel_age = nh.now().sec - last_cmd_vel.sec;
 			if (last_cmd_vel_age > 1)
 			{
-				DRIVEMOTOR_SetSpeed(0, 0, left_dir, right_dir);
+				DRIVEMOTOR_SetSpeed(0, 0, 0, 0);
 			}
 			else
 			{
