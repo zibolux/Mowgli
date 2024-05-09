@@ -66,9 +66,9 @@
 #include "mower_msgs/HighLevelStatus.h"
 
 #ifdef OPTION_PERIMETER
-#  include "perimeter.h"
-#  include "mower_msgs/Perimeter.h"
-#  include "mower_msgs/PerimeterControlSrv.h"
+	#include "perimeter.h"
+	#include "mower_msgs/Perimeter.h"
+	#include "mower_msgs/PerimeterControlSrv.h"
 #endif
 
 #define ODOM_NBT_TIME_MS 100
