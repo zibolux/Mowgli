@@ -89,6 +89,7 @@ static uint8_t left_dir = 0;
 static uint8_t right_dir = 0;
 
 // blade motor control
+static uint8_t target_blade_on_off = 0;
 static uint8_t blade_on_off = 0;
 static uint8_t blade_direction = 0;
 
@@ -203,7 +204,7 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 	{
 		PANEL_Set_LED(PANEL_LED_LOCK, PANEL_LED_ON);
 	}
-	if (blade_on_off)
+	if (target_blade_on_off)
 	{
 		if (BLADEMOTOR_bActivated)
 		{
@@ -278,7 +279,7 @@ extern "C" void CommandHighLevelStatusMessageCb(const mower_msgs::HighLevelStatu
 		PANEL_Set_LED(PANEL_LED_8H, PANEL_LED_OFF);
 		main_eOpenmowerStatus = OPENMOWER_STATUS_IDLE;
 		left_dir = right_dir = 1;
-		left_speed = right_speed = blade_on_off = 0;
+		left_speed = right_speed = blade_on_off = target_blade_on_off = 0;
 		break;
 	}
 }
@@ -374,6 +375,7 @@ extern "C" void motors_handler()
 {
 	if (NBT_handler(&motors_nbt))
 	{
+		blade_on_off = target_blade_on_off;
 		if (Emergency_State())
 		{
 			DRIVEMOTOR_SetSpeed(0, 0, 0, 0);
@@ -597,7 +599,7 @@ extern "C" void broadcast_handler()
 		om_mower_status_msg.mow_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
 		om_mower_status_msg.left_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
 		om_mower_status_msg.right_esc_status.status = mower_msgs::ESCStatus::ESC_STATUS_OK;
-
+		om_mower_status_msg.mow_enabled = target_blade_on_off;
 		pubOMStatus.publish(&om_mower_status_msg);
 
 	}
@@ -611,12 +613,12 @@ void cbEnableMowerMotor(const mower_msgs::MowerControlSrvRequest &req, mower_msg
 {
 	if (req.mow_enabled && !Emergency_State())
 	{
-		blade_on_off = 1;
+		target_blade_on_off = 1;
 		blade_direction = req.mow_direction;
 	}
 	else
 	{
-		blade_on_off = 0;
+		target_blade_on_off = 0;
 	}
 }
 
